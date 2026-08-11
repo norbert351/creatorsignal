@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto'
+import cors from '@fastify/cors'
 import Fastify from 'fastify'
 import { z } from 'zod'
 import { DECISION_VALUES, normalizeTopic } from '@creatorsignal/shared'
+import { draftReply } from '@creatorsignal/mind-client'
 import type { MindGateway } from '@creatorsignal/mind-client'
 import type { Config } from './config.js'
 import type { Store } from './db.js'
@@ -33,6 +35,17 @@ export function buildServer(deps: ServerDeps) {
   const { store, gateway, pipelineDeps, config } = deps
   const server = Fastify({ logger: { level: config.logLevel } })
 
+  void server.register(cors, { origin: true })
+
+  if (config.apiToken) {
+    server.addHook('onRequest', async (request, reply) => {
+      if (request.url === '/health' || request.url.startsWith('/health')) return
+      if (request.headers.authorization !== `Bearer ${config.apiToken}`) {
+        return reply.code(401).send({ error: 'unauthorized' })
+      }
+    })
+  }
+
   server.get('/health', async () => ({
     ok: true,
     mindMode: gateway.mode,
@@ -49,6 +62,18 @@ export function buildServer(deps: ServerDeps) {
     let signals = store.listSignals(query.kind)
     if (query.limit !== undefined) signals = signals.slice(-query.limit)
     return { signals }
+  })
+
+  server.get('/api/comments', async (request) => {
+    const query = z
+      .object({
+        videoId: z.string().optional(),
+        limit: z.coerce.number().int().positive().max(500).optional(),
+      })
+      .parse(request.query)
+    let comments = store.listComments(query.videoId)
+    if (query.limit !== undefined) comments = comments.slice(0, query.limit)
+    return { comments }
   })
 
   server.get('/api/opportunities', async (request) => {
@@ -115,6 +140,28 @@ export function buildServer(deps: ServerDeps) {
   server.get('/api/digests', async (request) => {
     const query = z.object({ limit: z.coerce.number().int().positive().max(50).optional() }).parse(request.query)
     return { digests: store.listDigests(query.limit ?? 20) }
+  })
+
+  server.post('/api/reply-draft', async (request, reply) => {
+    const body = z
+      .object({ fanId: z.string().min(1), topic: z.string().max(100).optional() })
+      .safeParse(request.body)
+    if (!body.success) {
+      return reply.code(400).send({ error: 'invalid_body', issues: body.error.issues })
+    }
+    const fan = store.listFans(0).find((f) => f.authorId === body.data.fanId)
+    if (!fan) {
+      return reply.code(404).send({ error: 'not_found' })
+    }
+    const draft = draftReply(fan, body.data.topic)
+    store.insertCreatorMemory({
+      id: randomUUID(),
+      kind: 'draft',
+      content: draft,
+      refId: fan.authorId,
+      createdAt: new Date().toISOString(),
+    })
+    return { ok: true, draft, fan }
   })
 
   server.post('/api/pipeline/run', async (request) => {

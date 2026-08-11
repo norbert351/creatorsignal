@@ -123,6 +123,14 @@ export function computeFans(signals: Signal[], options: FanOptions): Fan[] {
   return fans.filter((f) => f.superfanScore >= options.superfanThreshold)
 }
 
+export function draftReply(fan: Fan, topic?: string): string {
+  const interest = topic ?? fan.topics[0] ?? 'your favorite topic'
+  if (fan.questionCount > 0) {
+    return `${fan.name}, you've asked about ${interest} ${fan.questionCount} times across your comments, so this one is for you. Full breakdown coming this week.`
+  }
+  return `${fan.name}, you've been one of the most consistent voices here with ${fan.engagementCount} engagements. What do you want to see next?`
+}
+
 export interface DigestOptions {
   /** Opportunity ids that are new since the last run. */
   newlyCreatedIds: string[]

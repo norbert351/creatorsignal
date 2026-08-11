@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { Fan, Opportunity, Signal } from '@creatorsignal/shared'
-import { computeFans, composeDigest, detectOpportunities } from './detect.js'
+import { computeFans, composeDigest, detectOpportunities, draftReply } from './detect.js'
 
 function signal(overrides: Partial<Signal>): Signal {
   return {
@@ -145,6 +145,35 @@ describe('computeFans', () => {
     const fan = fans[0]
     if (!fan) throw new Error('no fan')
     expect(fan.superfanScore).toBe(100)
+  })
+})
+
+describe('draftReply', () => {
+  const fan: Fan = {
+    authorId: 'a1',
+    name: 'GeoCurious_MK',
+    engagementCount: 6,
+    questionCount: 4,
+    topics: ['bir claim egypt tawil', 'halaib triangle'],
+    superfanScore: 100,
+    lastActiveAt: '2026-08-02T00:00:00.000Z',
+  }
+
+  it('references the fans specific question count', () => {
+    const draft = draftReply(fan)
+    expect(draft).toContain('GeoCurious_MK')
+    expect(draft).toContain('bir claim egypt tawil')
+    expect(draft).toContain('4 times')
+  })
+
+  it('honors an explicit topic', () => {
+    expect(draftReply(fan, 'minoan')).toContain('minoan')
+  })
+
+  it('falls back to engagement for non-question fans', () => {
+    const quietFan: Fan = { ...fan, questionCount: 0, engagementCount: 3 }
+    const draft = draftReply(quietFan)
+    expect(draft).toContain('3 engagements')
   })
 })
 

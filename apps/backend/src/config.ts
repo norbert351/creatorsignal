@@ -24,6 +24,8 @@ export const configSchema = z.object({
   superfanThreshold: z.coerce.number().int().nonnegative().default(30),
   seedOnBoot: z.coerce.boolean().default(false),
   ingestDaysBack: z.coerce.number().int().positive().default(30),
+  /** When set, /api/* requires `authorization: Bearer <token>`. */
+  apiToken: z.string().min(8).optional(),
 })
 export type Config = z.infer<typeof configSchema>
 
@@ -35,16 +37,21 @@ function csv(value: string | undefined): string[] {
     .filter((v) => v.length > 0)
 }
 
+/** CREATORSIGNAL_PORT -> port, CREATORSIGNAL_YOUTUBE_VIDEO_IDS -> youtubeVideoIds */
+function toCamelCase(key: string): string {
+  return key.toLowerCase().replace(/_([a-z])/g, (_match, letter: string) => letter.toUpperCase())
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv): Config {
   const raw: Record<string, string | undefined> = {}
   for (const [key, value] of Object.entries(env)) {
     if (key.startsWith('CREATORSIGNAL_')) {
-      raw[key.slice('CREATORSIGNAL_'.length)] = value
+      raw[toCamelCase(key.slice('CREATORSIGNAL_'.length))] = value
     }
   }
   const parsed = configSchema.safeParse({
     ...raw,
-    youtubeVideoIds: csv(raw.youtubeVideoIds),
+    youtubeVideoIds: raw.youtubeVideoIds ? csv(raw.youtubeVideoIds) : undefined,
   })
   if (!parsed.success) {
     const details = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('\n')
