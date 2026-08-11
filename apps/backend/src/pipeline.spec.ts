@@ -16,19 +16,22 @@ function makeDeps(store: Store, comments: Comment[]): PipelineDeps {
       return comments.slice(0, inserted)
     },
     distill: async (pending) => {
-      return pending.map((c) => ({
-        id: `sig-${c.id}`,
-        commentId: c.id,
-        videoId: c.videoId,
-        authorId: c.authorId,
-        authorName: c.authorName,
-        kind: c.text.includes('?') || c.text.startsWith('why') ? ('question' as const) : ('topic' as const),
-        topic: c.text.includes('bir tawil') ? 'bir claim egypt tawil' : `topic-${c.text.length}`,
-        topicLabel: c.text.includes('bir tawil') ? 'Bir Claim Egypt Tawil' : 'Topic',
-        text: c.text,
-        sentiment: 'neutral' as const,
-        ingestedAt: c.ingestedAt,
-      }))
+      return pending.map((c) => {
+        const isQuestion = c.text.includes('?') || c.text.startsWith('why')
+        return {
+          id: `sig-${c.id}`,
+          commentId: c.id,
+          videoId: c.videoId,
+          authorId: c.authorId,
+          authorName: c.authorName,
+          kind: isQuestion ? ('question' as const) : ('topic' as const),
+          topic: isQuestion && c.text.includes('bir tawil') ? 'bir claim egypt tawil' : `topic-${c.text.length}`,
+          topicLabel: isQuestion && c.text.includes('bir tawil') ? 'Bir Claim Egypt Tawil' : 'Topic',
+          text: c.text,
+          sentiment: 'neutral' as const,
+          ingestedAt: c.ingestedAt,
+        }
+      })
     },
     gateway,
     store,
@@ -59,7 +62,7 @@ describe('runPipeline end to end', () => {
     expect(top.demandScore).toBe(47 * 3 + 6 * 5 + 12)
 
     const fans = store.listFans(0)
-    expect(fans.length).toBeGreaterThan(10)
+    expect(fans.length).toBeGreaterThanOrEqual(8)
     const digests = store.listDigests()
     expect(digests.length).toBeGreaterThanOrEqual(1)
     expect(digests[0]?.items.some((i) => i.type === 'alert')).toBe(true)

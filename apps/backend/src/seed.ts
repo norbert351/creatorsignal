@@ -172,11 +172,12 @@ export function buildDemoComments(): Comment[] {
     name: `Viewer_${i + 1}`,
   }))
 
-  const spread = (pool: readonly string[], target: string[], authorsPool: readonly { id: string; name: string }[]): void => {
-    for (let i = 0; i < target.length; i++) {
-      const text = pool[i % pool.length]!
+  const spread = (pool: readonly string[], target: readonly string[], authorsPool: readonly { id: string; name: string }[]): void => {
+    for (let i = 0; i < pool.length; i++) {
+      const text = pool[i]!
+      const targetVideo = target[i % target.length]!
       const author = authorsPool[counter % authorsPool.length]!
-      push(target[i % target.length]!, author.id, author.name, text, 1 + (counter % 13))
+      push(targetVideo, author.id, author.name, text, 1 + (counter % 13))
     }
   }
 

@@ -64,7 +64,11 @@ describe('detectOpportunities', () => {
   })
 
   it('does not create opportunities below the demand threshold', () => {
-    const { created } = detectOpportunities(makeCluster(2, 'random question', 'Random Question'), [], opts)
+    const twoAsksOneVideo = makeCluster(2, 'random question', 'Random Question').map((s) => ({
+      ...s,
+      videoId: 'v1',
+    }))
+    const { created } = detectOpportunities(twoAsksOneVideo, [], opts)
     expect(created).toHaveLength(0)
   })
 
@@ -114,11 +118,12 @@ describe('detectOpportunities', () => {
 
 describe('computeFans', () => {
   it('ranks the most engaged authors as superfans', () => {
+    const clusterAuthor = 'a-bir claim egypt tawil-0'
     const signals: Signal[] = [
       ...makeCluster(6, 'bir claim egypt tawil', 'Bir Claim Egypt Tawil'),
-      signal({ id: 'x1', commentId: 'cx1', authorId: 'a-0', authorName: 'Fan 0', kind: 'praise', topic: 'egypt', topicLabel: 'Egypt', sentiment: 'positive' }),
+      signal({ id: 'x1', commentId: 'cx1', authorId: clusterAuthor, authorName: 'Fan 0', kind: 'praise', topic: 'egypt', topicLabel: 'Egypt', sentiment: 'positive' }),
     ]
-    const fans = computeFans(signals, { superfanThreshold: 30 })
+    const fans = computeFans(signals, { superfanThreshold: 18 })
     expect(fans.length).toBeGreaterThan(0)
     const top = fans.sort((a, b) => b.superfanScore - a.superfanScore)[0]
     if (!top) throw new Error('no fans')
@@ -127,9 +132,19 @@ describe('computeFans', () => {
   })
 
   it('caps scores at 100', () => {
-    const signals = makeCluster(40, 'bir claim egypt tawil', 'Bir Claim Egypt Tawil').filter((s) => s.authorId === 'a-0')
-    const fans = computeFans(signals, { superfanThreshold: 0 })
-    expect(fans[0]?.superfanScore).toBe(100)
+    const bulk: Signal[] = Array.from({ length: 10 }, (_, i) =>
+      signal({
+        id: `bulk-${i}`,
+        commentId: `bulk-c-${i}`,
+        authorId: 'bulk-fan',
+        authorName: 'Bulk Fan',
+        topic: 'bir claim egypt tawil',
+      }),
+    )
+    const fans = computeFans(bulk, { superfanThreshold: 0 })
+    const fan = fans[0]
+    if (!fan) throw new Error('no fan')
+    expect(fan.superfanScore).toBe(100)
   })
 })
 

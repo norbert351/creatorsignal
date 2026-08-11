@@ -61,7 +61,7 @@ export function detectOpportunities(
         relatedAuthorIds,
         lastSeenAt: now,
       })
-    } else if (demandScore >= options.minDemandScore) {
+    } else if (unanswered && demandScore >= options.minDemandScore) {
       created.push({
         id: randomUUID(),
         topic,

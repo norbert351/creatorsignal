@@ -22,6 +22,9 @@ const STOPWORDS = new Set([
   'also', 'too', 'very', 'so', 'then', 'than', 'while', 'because', 'if',
   'though', 'tho', 'yeah', 'yes', 'yep', 'no', 'nope', 'ok', 'okay', 'hey',
   'hi', 'hello', 'guys', 'man', 'bro', 'dude', 'folks', 'everybody',
+  'civilization', 'explain', 'explained', 'cover', 'covering', 'empire',
+  'history', 'story', 'stories', 'facts', 'stuff', 'deal', 'palace', 'palac',
+  'disput', 'wanna', 'gonna', 'kinda', 'sorta',
 ])
 
 function stem(word: string): string {

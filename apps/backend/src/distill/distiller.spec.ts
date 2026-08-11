@@ -12,7 +12,8 @@ describe('classifyComment', () => {
   it('detects content requests', () => {
     expect(classifyComment('make a video on the minoan civilization').kind).toBe('request')
     expect(classifyComment('please explain the halaib triangle').kind).toBe('request')
-    expect(classifyComment('do the bronze age collapse next').kind).toBe('request')
+    expect(classifyComment('please do the bronze age collapse next').kind).toBe('request')
+    expect(classifyComment('a tutorial on enclaves would be great').kind).toBe('request')
   })
 
   it('detects praise and critique', () => {

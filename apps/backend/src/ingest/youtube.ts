@@ -15,6 +15,14 @@ interface ThreadItem {
   }
 }
 
+interface ChannelItem {
+  contentDetails?: { relatedPlaylists?: { uploads?: string } }
+}
+
+interface PlaylistItem {
+  contentDetails?: { videoId?: string }
+}
+
 /**
  * YouTube Data API v3 client. Incremental by cursor: for every video we keep
  * the newest publishedAt we have seen in channel_state and only pull comment
@@ -35,9 +43,8 @@ export class YoutubeIngestor {
       'channels',
       { part: 'contentDetails', id: this.channelId },
     )
-    const uploads = channels?.items?.[0]?.contentDetails?.relatedPlaylists?.uploads as
-      | string
-      | undefined
+    const channelItems = (channels?.items ?? []) as ChannelItem[]
+    const uploads = channelItems[0]?.contentDetails?.relatedPlaylists?.uploads
     if (!uploads) return []
     const playlist = await this.getJson('playlistItems', {
       part: 'contentDetails',
@@ -45,8 +52,8 @@ export class YoutubeIngestor {
       maxResults: '50',
     })
     const ids: string[] = []
-    for (const item of playlist?.items ?? []) {
-      const videoId = item?.contentDetails?.videoId as string | undefined
+    for (const item of (playlist?.items ?? []) as PlaylistItem[]) {
+      const videoId = item?.contentDetails?.videoId
       if (videoId) ids.push(videoId)
     }
     return ids
