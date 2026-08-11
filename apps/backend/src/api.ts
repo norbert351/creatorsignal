@@ -1,5 +1,8 @@
 import { randomUUID } from 'node:crypto'
+import { fileURLToPath } from 'node:url'
+import { dirname, join } from 'node:path'
 import cors from '@fastify/cors'
+import fastifyStatic from '@fastify/static'
 import Fastify from 'fastify'
 import { z } from 'zod'
 import { DECISION_VALUES, normalizeTopic } from '@creatorsignal/shared'
@@ -37,9 +40,16 @@ export function buildServer(deps: ServerDeps) {
 
   void server.register(cors, { origin: true })
 
+  // Static viewer (pure client, no secrets).
+  const viewerDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'viewer')
+  void server.register(fastifyStatic, { root: viewerDir, prefix: '/viewer/' })
+  server.get('/', async (_request, reply) => reply.sendFile('index.html', viewerDir))
+
   if (config.apiToken) {
     server.addHook('onRequest', async (request, reply) => {
-      if (request.url === '/health' || request.url.startsWith('/health')) return
+      const url = request.url
+      if (url === '/health' || url.startsWith('/health')) return
+      if (url === '/' || url.startsWith('/viewer/')) return
       if (request.headers.authorization !== `Bearer ${config.apiToken}`) {
         return reply.code(401).send({ error: 'unauthorized' })
       }

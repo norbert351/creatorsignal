@@ -134,6 +134,7 @@ export function buildDemoComments(): Comment[] {
     authorName: string,
     text: string,
     dayOffset: number,
+    platform: Comment['platform'] = 'youtube',
   ): void => {
     counter++
     const publishedAt = new Date(
@@ -141,6 +142,7 @@ export function buildDemoComments(): Comment[] {
     ).toISOString()
     comments.push({
       id: `demo-${String(counter).padStart(5, '0')}`,
+      platform,
       videoId,
       authorId,
       authorName,
@@ -188,6 +190,29 @@ export function buildDemoComments(): Comment[] {
   spread(CRITIQUE, ['v1', 'v2', 'v5'], authors)
   spread(MISC_QUESTIONS, ['v1', 'v2', 'v3', 'v4', 'v5', 'v6'], oneOffs)
 
+  // Cross-platform signals: the same creator also gets asked the same
+  // question on TikTok and X, which is what pushes demand past the threshold.
+  const TIKTOK_COMMENTS = [
+    'why does egypt not claim bir tawil',
+    'do bir tawil on tiktok',
+    'explain the bir tawil border',
+    'is bir tawil real',
+    'why is bir tawil unclaimed',
+  ]
+  const X_COMMENTS = [
+    'egypt could claim bir tawil any time, why not',
+    'bir tawil thread when',
+    'the bir tawil map is wild',
+    'why does no one own bir tawil',
+    'explain bir tawil in a thread',
+  ]
+  for (let i = 0; i < TIKTOK_COMMENTS.length; i++) {
+    push('v1', `tt:${i + 1}`, `TTViewer_${i + 1}`, TIKTOK_COMMENTS[i]!, 2 + (i % 4), 'tiktok')
+  }
+  for (let i = 0; i < X_COMMENTS.length; i++) {
+    push('v1', `x:${i + 1}`, `XUser_${i + 1}`, X_COMMENTS[i]!, 3 + (i % 4), 'x')
+  }
+
   return comments
 }
 
@@ -212,6 +237,7 @@ export function demoSignals(comments: Comment[]): Signal[] {
     return {
       id: `sig-${c.id}`,
       commentId: c.id,
+      platform: c.platform,
       videoId: c.videoId,
       authorId: c.authorId,
       authorName: c.authorName,

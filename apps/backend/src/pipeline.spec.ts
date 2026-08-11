@@ -21,6 +21,7 @@ function makeDeps(store: Store, comments: Comment[]): PipelineDeps {
         return {
           id: `sig-${c.id}`,
           commentId: c.id,
+          platform: c.platform,
           videoId: c.videoId,
           authorId: c.authorId,
           authorName: c.authorName,
@@ -55,11 +56,11 @@ describe('runPipeline end to end', () => {
     const top = opportunities[0]
     if (!top) throw new Error('expected at least one opportunity')
     expect(top.topic).toBe('bir claim egypt tawil')
-    expect(top.repeatCount).toBe(47)
+    expect(top.repeatCount).toBe(50)
     expect(top.videoCount).toBe(6)
     expect(top.unanswered).toBe(true)
     expect(top.status).toBe('open')
-    expect(top.demandScore).toBe(47 * 3 + 6 * 5 + 12)
+    expect(top.demandScore).toBe(50 * 3 + 6 * 5 + 12)
 
     const fans = store.listFans(0)
     expect(fans.length).toBeGreaterThanOrEqual(8)

@@ -17,6 +17,7 @@ import type {
 const DDL = `
 CREATE TABLE IF NOT EXISTS comments (
   id TEXT PRIMARY KEY,
+  platform TEXT NOT NULL DEFAULT 'youtube',
   video_id TEXT NOT NULL,
   author_id TEXT NOT NULL,
   author_name TEXT NOT NULL,
@@ -25,10 +26,12 @@ CREATE TABLE IF NOT EXISTS comments (
   ingested_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_comments_video ON comments(video_id);
+CREATE INDEX IF NOT EXISTS idx_comments_platform ON comments(platform);
 
 CREATE TABLE IF NOT EXISTS signals (
   id TEXT PRIMARY KEY,
   comment_id TEXT NOT NULL UNIQUE,
+  platform TEXT NOT NULL DEFAULT 'youtube',
   video_id TEXT NOT NULL,
   author_id TEXT NOT NULL,
   author_name TEXT NOT NULL,
@@ -41,6 +44,7 @@ CREATE TABLE IF NOT EXISTS signals (
 );
 CREATE INDEX IF NOT EXISTS idx_signals_topic ON signals(topic);
 CREATE INDEX IF NOT EXISTS idx_signals_kind ON signals(kind);
+CREATE INDEX IF NOT EXISTS idx_signals_platform ON signals(platform);
 
 CREATE TABLE IF NOT EXISTS opportunities (
   id TEXT PRIMARY KEY,
@@ -137,11 +141,12 @@ export class Store {
   insertComment(comment: Comment): boolean {
     const result = this.db
       .prepare(
-        `INSERT OR IGNORE INTO comments (id, video_id, author_id, author_name, text, published_at, ingested_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT OR IGNORE INTO comments (id, platform, video_id, author_id, author_name, text, published_at, ingested_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         comment.id,
+        comment.platform,
         comment.videoId,
         comment.authorId,
         comment.authorName,
@@ -178,6 +183,7 @@ export class Store {
   private rowToComment(r: RawRow): Comment {
     return {
       id: String(r.id),
+      platform: (String(r.platform) ?? 'youtube') as Comment['platform'],
       videoId: String(r.video_id),
       authorId: String(r.author_id),
       authorName: String(r.author_name),
@@ -194,14 +200,15 @@ export class Store {
   insertSignals(signals: Signal[]): number {
     const stmt = this.db.prepare(
       `INSERT OR IGNORE INTO signals
-         (id, comment_id, video_id, author_id, author_name, kind, topic, topic_label, text, sentiment, ingested_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, comment_id, platform, video_id, author_id, author_name, kind, topic, topic_label, text, sentiment, ingested_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     let inserted = 0
     for (const s of signals) {
       const result = stmt.run(
         s.id,
         s.commentId,
+        s.platform,
         s.videoId,
         s.authorId,
         s.authorName,
@@ -231,6 +238,7 @@ export class Store {
     return {
       id: String(r.id),
       commentId: String(r.comment_id),
+      platform: (String(r.platform) ?? 'youtube') as Signal['platform'],
       videoId: String(r.video_id),
       authorId: String(r.author_id),
       authorName: String(r.author_name),

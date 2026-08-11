@@ -1,4 +1,4 @@
-import type { FromMindMessage } from '@creatorsignal/shared'
+import type { Comment, FromMindMessage } from '@creatorsignal/shared'
 import { SimulatedMindGateway, TelegramMindGateway } from '@creatorsignal/mind-client'
 import type { MindGateway } from '@creatorsignal/mind-client'
 import { buildServer } from './api.js'
@@ -6,6 +6,8 @@ import type { Config } from './config.js'
 import { Store } from './db.js'
 import { LlmClient } from './distill/llm.js'
 import { distillComments } from './distill/distiller.js'
+import { TiktokIngestor } from './ingest/tiktok.js'
+import { XIngestor } from './ingest/x.js'
 import { YoutubeIngestor } from './ingest/youtube.js'
 import type { PipelineDeps } from './pipeline.js'
 import { seedDatabase } from './seed.js'
@@ -84,9 +86,27 @@ export function createApp(config: Config, mindModeOverride?: 'simulated' | 'tele
         config.ingestDaysBack,
       )
     : null
+  const tiktok = config.tiktokApiKey
+    ? new TiktokIngestor(config.tiktokApiKey, config.tiktokVideoIds, config.ingestDaysBack)
+    : null
+  const x = config.xBearerToken
+    ? new XIngestor(config.xBearerToken, config.xUserIds, config.xQuery, config.ingestDaysBack)
+    : null
 
   const pipelineDeps: PipelineDeps = {
-    ingest: async () => (youtube ? youtube.ingestNew(store) : []),
+    ingest: async () => {
+      const results = await Promise.allSettled([
+        youtube ? youtube.ingestNew(store) : Promise.resolve([]),
+        tiktok ? tiktok.ingestNew(store) : Promise.resolve([]),
+        x ? x.ingestNew(store) : Promise.resolve([]),
+      ])
+      const comments: Comment[] = []
+      for (const result of results) {
+        if (result.status === 'fulfilled') comments.push(...result.value)
+        else console.warn(`ingest failed: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`)
+      }
+      return comments
+    },
     distill: (comments) => distillComments(comments, llm),
     gateway,
     store,

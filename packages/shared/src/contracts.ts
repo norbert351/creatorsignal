@@ -7,6 +7,9 @@ import { z } from 'zod'
 export const SIGNAL_KINDS = ['question', 'request', 'topic', 'praise', 'critique'] as const
 export type SignalKind = (typeof SIGNAL_KINDS)[number]
 
+export const PLATFORMS = ['youtube', 'tiktok', 'x'] as const
+export type Platform = (typeof PLATFORMS)[number]
+
 export const SENTIMENTS = ['positive', 'negative', 'neutral'] as const
 export type Sentiment = (typeof SENTIMENTS)[number]
 
@@ -28,6 +31,7 @@ export type CreatorMemoryKind = (typeof CREATOR_MEMORY_KINDS)[number]
 
 export const commentSchema = z.object({
   id: z.string(),
+  platform: z.enum(PLATFORMS),
   videoId: z.string(),
   authorId: z.string(),
   authorName: z.string(),
@@ -40,6 +44,7 @@ export type Comment = z.infer<typeof commentSchema>
 export const signalSchema = z.object({
   id: z.string(),
   commentId: z.string(),
+  platform: z.enum(PLATFORMS),
   videoId: z.string(),
   authorId: z.string(),
   authorName: z.string(),

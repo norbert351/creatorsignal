@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import type { Comment } from '@creatorsignal/shared'
 import { classifyComment, distillComments } from './distiller.js'
 
 describe('classifyComment', () => {
@@ -35,9 +36,10 @@ describe('classifyComment', () => {
 
 describe('distillComments', () => {
   it('produces one signal per comment with normalized topics, no LLM needed', async () => {
-    const comments = [
+    const comments: Comment[] = [
       {
         id: 'c1',
+        platform: 'youtube',
         videoId: 'v1',
         authorId: 'a1',
         authorName: 'Fan One',
@@ -47,6 +49,7 @@ describe('distillComments', () => {
       },
       {
         id: 'c2',
+        platform: 'youtube',
         videoId: 'v2',
         authorId: 'a2',
         authorName: 'Fan Two',

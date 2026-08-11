@@ -93,6 +93,7 @@ export class YoutubeIngestor {
         if (!snippet) continue
         const comment: Comment = {
           id: item.id,
+          platform: 'youtube',
           videoId,
           authorId: snippet.authorChannelId?.value ?? `yt:${videoId}:${snippet.authorDisplayName}`,
           authorName: snippet.authorDisplayName,

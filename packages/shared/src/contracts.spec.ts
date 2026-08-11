@@ -12,6 +12,7 @@ import {
 const baseSignal: Signal = {
   id: 's1',
   commentId: 'c1',
+  platform: 'youtube',
   videoId: 'v1',
   authorId: 'a1',
   authorName: 'GeoCurious_MK',

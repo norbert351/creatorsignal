@@ -46,7 +46,7 @@ describe('api server', () => {
     expect(response.statusCode).toBe(200)
     const body = response.json()
     expect(body.ok).toBe(true)
-    expect(body.stats.comments).toBe(93)
+    expect(body.stats.comments).toBe(103)
   })
 
   it('serves seeded comments', async () => {
@@ -62,7 +62,7 @@ describe('api server', () => {
     const body = response.json()
     const top = body.opportunities[0]
     expect(top.topic).toBe('bir claim egypt tawil')
-    expect(top.repeatCount).toBe(47)
+    expect(top.repeatCount).toBe(48)
     expect(top.relatedAuthors.length).toBeGreaterThan(0)
   })
 

@@ -53,6 +53,7 @@ export async function distillComments(
         signals.push({
           id: randomUUID(),
           commentId: comment.id,
+          platform: comment.platform,
           videoId: comment.videoId,
           authorId: comment.authorId,
           authorName: comment.authorName,
@@ -76,6 +77,7 @@ export async function distillComments(
     signals.push({
       id: randomUUID(),
       commentId: comment.id,
+      platform: comment.platform,
       videoId: comment.videoId,
       authorId: comment.authorId,
       authorName: comment.authorName,

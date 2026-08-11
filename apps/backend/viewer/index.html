@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CreatorSignal — audience intelligence, live</title>
+<link rel="stylesheet" href="/viewer/style.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">CS</span>
+    <div>
+      <h1>CreatorSignal</h1>
+      <p class="tagline">A persistent Mind that turns audience noise into decisions</p>
+    </div>
+  </div>
+  <div class="status">
+    <span id="mind-mode" class="pill">mind: simulated</span>
+    <button id="run-pipeline" class="btn">Run pipeline</button>
+  </div>
+</header>
+
+<section class="stats" id="stats">
+  <div class="stat"><span class="num" id="stat-comments">–</span><span class="label">signals ingested</span></div>
+  <div class="stat"><span class="num" id="stat-opportunities">–</span><span class="label">opportunities</span></div>
+  <div class="stat"><span class="num" id="stat-fans">–</span><span class="label">fans tracked</span></div>
+  <div class="stat"><span class="num" id="stat-digests">–</span><span class="label">digests</span></div>
+</section>
+
+<section class="platforms" id="platform-bars"></section>
+
+<main class="grid">
+  <div class="card wide">
+    <h2>🎯 Audience opportunities</h2>
+    <p class="hint">Repeated unanswered questions the Mind detected across platforms. Decide what to make next.</p>
+    <div id="opportunities" class="list"></div>
+  </div>
+
+  <div class="card">
+    <h2>⭐ Relationship memory</h2>
+    <p class="hint">Your superfans, ranked by engagement and question count.</p>
+    <div id="fans" class="list"></div>
+  </div>
+
+  <div class="card wide">
+    <h2>💬 Latest signals</h2>
+    <p class="hint">Raw comments from YouTube, TikTok and X, classified into signals.</p>
+    <div class="filters" id="platform-filter">
+      <button data-platform="all" class="chip active">All</button>
+      <button data-platform="youtube" class="chip">YouTube</button>
+      <button data-platform="tiktok" class="chip">TikTok</button>
+      <button data-platform="x" class="chip">X</button>
+    </div>
+    <div id="comments" class="list"></div>
+  </div>
+
+  <div class="card">
+    <h2>📋 Daily digest</h2>
+    <p class="hint">What the Mind pushed to you.</p>
+    <div id="digests" class="list"></div>
+  </div>
+</main>
+
+<script src="/viewer/app.js"></script>
+</body>
+</html>
