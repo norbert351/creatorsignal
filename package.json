@@ -1,0 +1,22 @@
+{
+  "name": "creatorsignal",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.13.0",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "dev:backend": "pnpm --filter @creatorsignal/backend dev",
+    "seed": "pnpm --filter @creatorsignal/backend seed"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.1",
+    "turbo": "2.10.9",
+    "typescript": "5.9.3",
+    "vitest": "4.1.10"
+  }
+}

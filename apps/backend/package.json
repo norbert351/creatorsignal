@@ -1,0 +1,27 @@
+{
+  "name": "@creatorsignal/backend",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.spec.json",
+    "test": "vitest run",
+    "dev": "node --watch dist/index.js",
+    "start": "node dist/index.js",
+    "seed": "node dist/seed-cli.js"
+  },
+  "dependencies": {
+    "@creatorsignal/mind-client": "workspace:*",
+    "@creatorsignal/shared": "workspace:*",
+    "fastify": "5.11.3",
+    "zod": "4.4.3"
+  }
+}

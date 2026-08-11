@@ -1,0 +1,122 @@
+import type { FromMindMessage } from '@creatorsignal/shared'
+import { SimulatedMindGateway, TelegramMindGateway } from '@creatorsignal/mind-client'
+import type { MindGateway } from '@creatorsignal/mind-client'
+import { buildServer } from './api.js'
+import type { Config } from './config.js'
+import { Store } from './db.js'
+import { LlmClient } from './distill/llm.js'
+import { distillComments } from './distill/distiller.js'
+import { YoutubeIngestor } from './ingest/youtube.js'
+import type { PipelineDeps } from './pipeline.js'
+import { seedDatabase } from './seed.js'
+import { startWorkers } from './workers.js'
+
+export interface App {
+  store: Store
+  gateway: MindGateway
+  pipelineDeps: PipelineDeps
+  start: () => Promise<void>
+  stop: () => Promise<void>
+}
+
+function handleFromMind(store: Store): (message: FromMindMessage) => Promise<void> {
+  return async (message) => {
+    switch (message.type) {
+      case 'opportunity.created':
+      case 'opportunity.updated':
+        store.upsertOpportunity(message.payload.opportunity)
+        console.log(`[mind] opportunity ${message.type}: ${message.payload.opportunity.topicLabel}`)
+        break
+      case 'digest':
+        store.insertDigest(message.payload.digest)
+        console.log(`[mind] digest stored with ${message.payload.digest.items.length} items`)
+        break
+      case 'reply.draft':
+        store.insertCreatorMemory({
+          id: `draft-${message.id}`,
+          kind: 'draft',
+          content: message.payload.draft,
+          refId: message.payload.fanId,
+          createdAt: new Date().toISOString(),
+        })
+        console.log(`[mind] reply draft for fan ${message.payload.fanId}`)
+        break
+      case 'log':
+        console.log(`[mind] ${message.payload.level}: ${message.payload.message}`)
+        break
+    }
+  }
+}
+
+/**
+ * Composition root. Builds the store, the gateway (simulated or real Mind),
+ * the pipeline deps, the HTTP server, and the workers.
+ */
+export function createApp(config: Config, mindModeOverride?: 'simulated' | 'telegram'): App {
+  const store = new Store(config.dbPath)
+  const mode = mindModeOverride ?? config.mindMode
+
+  if (config.seedOnBoot && store.stats().comments === 0) {
+    const seeded = seedDatabase(store)
+    console.log(`[app] seeded demo dataset: ${seeded} comments`)
+  }
+
+  let gateway: MindGateway
+  if (mode === 'telegram') {
+    gateway = new TelegramMindGateway({
+      botToken: config.telegramBotToken ?? '',
+      groupId: config.telegramGroupId ?? '',
+      onMessage: handleFromMind(store),
+      log: (level, message) => console.log(`[mind] ${level}: ${message}`),
+    })
+  } else {
+    gateway = new SimulatedMindGateway()
+  }
+
+  const llm = config.llmApiKey
+    ? new LlmClient({ apiKey: config.llmApiKey, baseUrl: config.llmBaseUrl, model: config.llmModel })
+    : null
+  const youtube = config.youtubeApiKey
+    ? new YoutubeIngestor(
+        config.youtubeApiKey,
+        config.youtubeVideoIds,
+        config.youtubeChannelId,
+        config.ingestDaysBack,
+      )
+    : null
+
+  const pipelineDeps: PipelineDeps = {
+    ingest: async () => (youtube ? youtube.ingestNew(store) : []),
+    distill: (comments) => distillComments(comments, llm),
+    gateway,
+    store,
+    minDemandScore: config.minDemandScore,
+    superfanThreshold: config.superfanThreshold,
+  }
+
+  const server = buildServer({ store, gateway, pipelineDeps, config })
+  const workers = startWorkers({
+    store,
+    gateway,
+    pipelineDeps,
+    ingestIntervalMin: config.ingestIntervalMin,
+    digestTime: config.digestTime,
+  })
+
+  return {
+    store,
+    gateway,
+    pipelineDeps,
+    start: async () => {
+      await gateway.start?.()
+      await server.listen({ port: config.port, host: '0.0.0.0' })
+      console.log(`[app] CreatorSignal backend on :${config.port} (mind=${gateway.mode})`)
+    },
+    stop: async () => {
+      workers.stop()
+      await gateway.stop?.()
+      await server.close()
+      store.close()
+    },
+  }
+}
