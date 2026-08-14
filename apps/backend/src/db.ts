@@ -97,6 +97,24 @@ CREATE TABLE IF NOT EXISTS channel_state (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  handle TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS targets (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  platform TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  value TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_targets_user ON targets(user_id);
+CREATE INDEX IF NOT EXISTS idx_targets_platform ON targets(platform);
 `
 
 interface RawRow {
@@ -505,6 +523,85 @@ export class Store {
   }
 
   // -------------------------------------------------------------------------
+  // Users & targets (creator onboarding)
+  // -------------------------------------------------------------------------
+
+  upsertUser(user: { id: string; name: string; handle: string; createdAt: string }): void {
+    this.db
+      .prepare(
+        `INSERT INTO users (id, name, handle, created_at) VALUES (?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET name = excluded.name, handle = excluded.handle`,
+      )
+      .run(user.id, user.name, user.handle, user.createdAt)
+  }
+
+  getUser(id: string): { id: string; name: string; handle: string; createdAt: string } | null {
+    const row = this.db.prepare('SELECT * FROM users WHERE id = ?').get(id) as RawRow | undefined
+    if (!row) return null
+    return {
+      id: String(row.id),
+      name: String(row.name),
+      handle: String(row.handle),
+      createdAt: String(row.created_at),
+    }
+  }
+
+  listUsers(): Array<{ id: string; name: string; handle: string; createdAt: string }> {
+    const rows = this.db.prepare('SELECT * FROM users ORDER BY created_at ASC').all() as RawRow[]
+    return rows.map((r) => ({
+      id: String(r.id),
+      name: String(r.name),
+      handle: String(r.handle),
+      createdAt: String(r.created_at),
+    }))
+  }
+
+  addTarget(target: {
+    id: string
+    userId: string
+    platform: string
+    kind: string
+    value: string
+    createdAt: string
+  }): void {
+    this.db
+      .prepare(
+        `INSERT INTO targets (id, user_id, platform, kind, value, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(target.id, target.userId, target.platform, target.kind, target.value, target.createdAt)
+  }
+
+  listTargets(userId?: string): Array<{
+    id: string
+    userId: string
+    platform: string
+    kind: string
+    value: string
+    createdAt: string
+  }> {
+    const rows: RawRow[] =
+      userId === undefined
+        ? (this.db.prepare('SELECT * FROM targets ORDER BY created_at ASC').all() as RawRow[])
+        : (this.db
+            .prepare('SELECT * FROM targets WHERE user_id = ? ORDER BY created_at ASC')
+            .all(userId) as RawRow[])
+    return rows.map((r) => ({
+      id: String(r.id),
+      userId: String(r.user_id),
+      platform: String(r.platform),
+      kind: String(r.kind),
+      value: String(r.value),
+      createdAt: String(r.created_at),
+    }))
+  }
+
+  removeTarget(id: string): boolean {
+    const result = this.db.prepare('DELETE FROM targets WHERE id = ?').run(id)
+    return Number(result.changes) > 0
+  }
+
+  // -------------------------------------------------------------------------
   // Stats
   // -------------------------------------------------------------------------
 
@@ -517,6 +614,7 @@ export class Store {
       'decisions',
       'creator_memory',
       'digests',
+      'targets',
     ] as const
     const out: Record<string, number> = {}
     for (const table of tables) {

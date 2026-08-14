@@ -30,8 +30,11 @@ export class TiktokIngestor {
 
   /** Pulls new comments for all known videos and stores them. */
   async ingestNew(store: Store): Promise<Comment[]> {
+    // Merge per-creator targets stored via the onboarding API (live, no restart).
+    const dbTargets = store.listTargets().filter((t) => t.platform === 'tiktok' && t.kind === 'video')
+    const videoIds = [...this.videoIds, ...dbTargets.map((t) => t.value)]
     const inserted: Comment[] = []
-    for (const videoId of this.videoIds) {
+    for (const videoId of videoIds) {
       inserted.push(...(await this.ingestVideo(store, videoId)))
     }
     return inserted

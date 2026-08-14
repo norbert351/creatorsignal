@@ -3,48 +3,133 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>CreatorSignal — audience intelligence, live</title>
+<title>CreatorSignal — your audience is talking</title>
+<link rel="preconnect" href="https://api.fontshare.com" crossorigin />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://api.fontshare.com/v2/css?f[]=clash-display@400,500,600,700&f[]=general-sans@400,500,600&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="/viewer/style.css" />
 </head>
 <body>
+
 <header class="topbar">
   <div class="brand">
     <span class="logo">CS</span>
-    <div>
+    <div class="brand-text">
       <h1>CreatorSignal</h1>
-      <p class="tagline">A persistent Mind that turns audience noise into decisions</p>
+      <p class="tagline">a persistent Mind for creators</p>
     </div>
   </div>
   <div class="status">
-    <span id="mind-mode" class="pill">mind: simulated</span>
-    <button id="run-pipeline" class="btn">Run pipeline</button>
+    <span id="mind-mode" class="pill">mind: —</span>
+    <button id="run-pipeline" class="btn btn-primary">Run pipeline</button>
   </div>
 </header>
 
-<section class="stats" id="stats">
-  <div class="stat"><span class="num" id="stat-comments">–</span><span class="label">signals ingested</span></div>
-  <div class="stat"><span class="num" id="stat-opportunities">–</span><span class="label">opportunities</span></div>
-  <div class="stat"><span class="num" id="stat-fans">–</span><span class="label">fans tracked</span></div>
-  <div class="stat"><span class="num" id="stat-digests">–</span><span class="label">digests</span></div>
+<section class="hero">
+  <div class="hero-inner">
+    <p class="eyebrow">AUDIENCE INTELLIGENCE, LIVE</p>
+    <h2 class="hero-title">Your audience is telling you<br /><em>what to make next.</em></h2>
+    <p class="hero-sub">CreatorSignal listens to every comment across your channels, remembers who asks, and surfaces the opportunities your content is missing.</p>
+  </div>
+  <div class="stats" id="stats">
+    <div class="stat"><span class="num" id="stat-comments">–</span><span class="label">signals ingested</span></div>
+    <div class="stat"><span class="num" id="stat-opportunities">–</span><span class="label">opportunities</span></div>
+    <div class="stat"><span class="num" id="stat-fans">–</span><span class="label">fans tracked</span></div>
+    <div class="stat"><span class="num" id="stat-digests">–</span><span class="label">digests</span></div>
+  </div>
 </section>
 
-<section class="platforms" id="platform-bars"></section>
+<section class="onboarding" id="onboarding">
+  <div class="section-head">
+    <p class="eyebrow">ONE-TIME SETUP</p>
+    <h3>Connect your audience</h3>
+    <p class="hint">Paste your channel or video links and the Mind starts listening. Everything you see is scoped to your own audience.</p>
+  </div>
+
+  <div class="profile-row">
+    <div class="field">
+      <label for="profile-name">Your name</label>
+      <input id="profile-name" type="text" placeholder="e.g. Michael" autocomplete="off" />
+    </div>
+    <div class="field">
+      <label for="profile-handle">Handle</label>
+      <input id="profile-handle" type="text" placeholder="e.g. @zubbycrypt" autocomplete="off" />
+    </div>
+    <button id="save-profile" class="btn btn-secondary">Save profile</button>
+  </div>
+
+  <div class="platforms" id="platform-grid">
+    <div class="pf-card" data-platform="youtube">
+      <div class="pf-head">
+        <span class="pf-icon yt">▶</span>
+        <span class="pf-name">YouTube</span>
+      </div>
+      <p class="pf-desc">Channel ID, @handle or video URL</p>
+      <div class="pf-input">
+        <input type="text" data-target-input="youtube" placeholder="youtube.com/@channel" />
+        <button class="btn btn-mini" data-target-add="youtube">Connect</button>
+      </div>
+      <div class="pf-targets" data-target-list="youtube"></div>
+    </div>
+
+    <div class="pf-card" data-platform="tiktok">
+      <div class="pf-head">
+        <span class="pf-icon tt">♪</span>
+        <span class="pf-name">TikTok</span>
+      </div>
+      <p class="pf-desc">Video URL to pull comments from</p>
+      <div class="pf-input">
+        <input type="text" data-target-input="tiktok" placeholder="tiktok.com/@user/video/123" />
+        <button class="btn btn-mini" data-target-add="tiktok">Connect</button>
+      </div>
+      <div class="pf-targets" data-target-list="tiktok"></div>
+    </div>
+
+    <div class="pf-card" data-platform="x">
+      <div class="pf-head">
+        <span class="pf-icon x">𝕏</span>
+        <span class="pf-name">X</span>
+      </div>
+      <p class="pf-desc">Handle to watch mentions, or a search query</p>
+      <div class="pf-input">
+        <input type="text" data-target-input="x" placeholder="@yourhandle or query" />
+        <button class="btn btn-mini" data-target-add="x">Connect</button>
+      </div>
+      <div class="pf-targets" data-target-list="x"></div>
+    </div>
+
+    <div class="pf-card" data-platform="telegram">
+      <div class="pf-head">
+        <span class="pf-icon tg">✈</span>
+        <span class="pf-name">Telegram</span>
+      </div>
+      <p class="pf-desc">Group or channel where the Mind pushes digests</p>
+      <div class="pf-input">
+        <input type="text" data-target-input="telegram" placeholder="t.me/yourgroup" />
+        <button class="btn btn-mini" data-target-add="telegram">Connect</button>
+      </div>
+      <div class="pf-targets" data-target-list="telegram"></div>
+    </div>
+  </div>
+</section>
 
 <main class="grid">
   <div class="card wide">
-    <h2>🎯 Audience opportunities</h2>
+    <h3>🎯 Audience opportunities</h3>
     <p class="hint">Repeated unanswered questions the Mind detected across platforms. Decide what to make next.</p>
     <div id="opportunities" class="list"></div>
   </div>
 
   <div class="card">
-    <h2>⭐ Relationship memory</h2>
+    <h3>⭐ Relationship memory</h3>
     <p class="hint">Your superfans, ranked by engagement and question count.</p>
     <div id="fans" class="list"></div>
   </div>
 
   <div class="card wide">
-    <h2>💬 Latest signals</h2>
+    <h3>💬 Latest signals</h3>
     <p class="hint">Raw comments from YouTube, TikTok and X, classified into signals.</p>
     <div class="filters" id="platform-filter">
       <button data-platform="all" class="chip active">All</button>
@@ -56,11 +141,15 @@
   </div>
 
   <div class="card">
-    <h2>📋 Daily digest</h2>
+    <h3>📋 Daily digest</h3>
     <p class="hint">What the Mind pushed to you.</p>
     <div id="digests" class="list"></div>
   </div>
 </main>
+
+<footer class="foot">
+  <p>CreatorSignal · Creative Minds Jam #1 · a persistent Mind that turns audience noise into decisions</p>
+</footer>
 
 <script src="/viewer/app.js"></script>
 </body>

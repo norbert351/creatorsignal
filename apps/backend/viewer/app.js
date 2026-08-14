@@ -1,6 +1,7 @@
 // CreatorSignal viewer. Pure client, talks only to the backend API.
 // Reads the API token from localStorage (set once) and sends it as a Bearer
-// header. No business logic lives here.
+// header. Handles the onboarding flow (profile + connected targets) and the
+// live dashboard. No business logic lives here.
 
 const TOKEN_KEY = 'creatorsignal-token'
 
@@ -31,6 +32,15 @@ const PLATFORM_META = {
   youtube: { label: 'YouTube', dot: 'youtube' },
   tiktok: { label: 'TikTok', dot: 'tiktok' },
   x: { label: 'X', dot: 'x' },
+  telegram: { label: 'Telegram', dot: 'telegram' },
+}
+
+// Guess the target kind from what the creator pasted.
+const KIND_HINTS = {
+  youtube: (value) => (/watch\?v=|youtu\.be\//.test(value) ? 'video' : 'channel'),
+  tiktok: () => 'video',
+  x: (value) => (/^\s*@/.test(value) ? 'user' : 'query'),
+  telegram: () => 'group',
 }
 
 let currentPlatform = 'all'
@@ -44,7 +54,95 @@ function el(tag, className, text) {
 
 function platformPill(platform) {
   const meta = PLATFORM_META[platform] ?? { label: platform, dot: 'youtube' }
-  return el('span', `pill-sm ${meta.dot}`, meta.label)
+  const pill = el('span', `pill-sm platform-pill ${meta.dot}`)
+  pill.append(el('span', `dot ${meta.dot}`), el('span', '', meta.label))
+  return pill
+}
+
+// --------------------------------------------------------------- onboarding
+
+function renderTargets(targets) {
+  for (const platform of Object.keys(PLATFORM_META)) {
+    const wrap = document.querySelector(`[data-target-list="${platform}"]`)
+    if (!wrap) continue
+    wrap.innerHTML = ''
+    const mine = targets.filter((t) => t.platform === platform)
+    if (!mine.length) continue
+    for (const t of mine) {
+      const chip = el('div', 'tchip')
+      const left = el('span', '', t.value)
+      const kind = el('span', 'kind', t.kind)
+      const remove = el('button', 'x', '✕')
+      remove.title = 'Disconnect'
+      remove.onclick = async () => {
+        try {
+          const res = await api(`/targets/${t.id}`, { method: 'DELETE' })
+          renderTargets(res.targets)
+        } catch (error) {
+          console.error('remove target failed', error)
+        }
+      }
+      const inner = el('span', '', '')
+      inner.append(kind, left)
+      chip.append(inner, remove)
+      wrap.append(chip)
+    }
+  }
+}
+
+function bindOnboarding() {
+  document.getElementById('save-profile').onclick = async () => {
+    const name = document.getElementById('profile-name').value.trim()
+    const handle = document.getElementById('profile-handle').value.trim()
+    if (!name || !handle) return
+    try {
+      const res = await api('/profile', { method: 'POST', body: JSON.stringify({ name, handle }) })
+      renderTargets(res.targets)
+      document.getElementById('save-profile').textContent = 'Saved ✓'
+      setTimeout(() => {
+        document.getElementById('save-profile').textContent = 'Save profile'
+      }, 1600)
+    } catch (error) {
+      console.error('save profile failed', error)
+    }
+  }
+
+  for (const [platform, guess] of Object.entries(KIND_HINTS)) {
+    const addBtn = document.querySelector(`[data-target-add="${platform}"]`)
+    const input = document.querySelector(`[data-target-input="${platform}"]`)
+    if (!addBtn || !input) continue
+    const doAdd = async () => {
+      const value = input.value.trim()
+      if (!value) return
+      const kind = guess(value)
+      addBtn.disabled = true
+      try {
+        const res = await api('/targets', {
+          method: 'POST',
+          body: JSON.stringify({ platform, kind, value }),
+        })
+        input.value = ''
+        renderTargets(res.targets)
+      } catch (error) {
+        console.error('add target failed', error)
+      } finally {
+        addBtn.disabled = false
+      }
+    }
+    addBtn.onclick = doAdd
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') doAdd()
+    })
+  }
+}
+
+async function loadOnboarding() {
+  const res = await api('/profile')
+  if (res.user) {
+    document.getElementById('profile-name').value = res.user.name
+    document.getElementById('profile-handle').value = res.user.handle
+  }
+  renderTargets(res.targets)
 }
 
 // ------------------------------------------------------------------ render
@@ -54,19 +152,6 @@ function renderStats(stats) {
   document.getElementById('stat-opportunities').textContent = stats.opportunities ?? '–'
   document.getElementById('stat-fans').textContent = stats.fans ?? '–'
   document.getElementById('stat-digests').textContent = stats.digests ?? '–'
-}
-
-function renderPlatformBars(signals) {
-  const counts = { youtube: 0, tiktok: 0, x: 0 }
-  for (const s of signals) if (counts[s.platform] !== undefined) counts[s.platform]++
-  const wrap = document.getElementById('platform-bars')
-  wrap.innerHTML = ''
-  for (const [platform, count] of Object.entries(counts)) {
-    const meta = PLATFORM_META[platform]
-    const box = el('div', 'pf')
-    box.append(el('span', `dot ${meta.dot}`), el('span', '', meta.label), el('span', 'count', String(count)))
-    wrap.append(box)
-  }
 }
 
 function renderOpportunities(opportunities) {
@@ -193,7 +278,6 @@ async function refresh() {
     api('/digests?limit=5'),
   ])
   renderStats(health.stats)
-  renderPlatformBars(comments.comments)
   renderOpportunities(opportunities.opportunities)
   renderFans(fans.fans)
   renderComments(comments.comments)
@@ -215,6 +299,7 @@ async function runPipeline() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  bindOnboarding()
   document.getElementById('run-pipeline').onclick = runPipeline
   document.getElementById('platform-filter').addEventListener('click', (e) => {
     const btn = e.target.closest('.chip')
@@ -223,5 +308,6 @@ document.addEventListener('DOMContentLoaded', () => {
     for (const chip of document.querySelectorAll('.chip')) chip.classList.toggle('active', chip === btn)
     void refresh()
   })
+  void loadOnboarding()
   void refresh()
 })

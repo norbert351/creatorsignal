@@ -36,12 +36,14 @@ export class YoutubeIngestor {
     private readonly daysBack: number,
   ) {}
 
-  async resolveVideoIds(): Promise<string[]> {
+  async resolveVideoIds(extra?: { channelId?: string; videoIds: string[] }): Promise<string[]> {
     const ids = new Set(this.videoIds)
-    if (this.channelId) {
+    for (const id of extra?.videoIds ?? []) ids.add(id)
+    const channelId = extra?.channelId ?? this.channelId
+    if (channelId) {
       const channels = await this.getJson(
         'channels',
-        { part: 'contentDetails', id: this.channelId },
+        { part: 'contentDetails', id: channelId },
       )
       const channelItems = (channels?.items ?? []) as ChannelItem[]
       const uploads = channelItems[0]?.contentDetails?.relatedPlaylists?.uploads
@@ -62,7 +64,14 @@ export class YoutubeIngestor {
 
   /** Pulls new comments for all known videos and stores them. */
   async ingestNew(store: Store): Promise<Comment[]> {
-    const videos = await this.resolveVideoIds()
+    // Merge per-creator targets stored via the onboarding API (added live,
+    // no restart needed). Channel targets expand to the uploads playlist.
+    const dbTargets = store.listTargets().filter((t) => t.platform === 'youtube')
+    const extra = {
+      channelId: dbTargets.find((t) => t.kind === 'channel')?.value,
+      videoIds: dbTargets.filter((t) => t.kind === 'video').map((t) => t.value),
+    }
+    const videos = await this.resolveVideoIds(extra)
     const inserted: Comment[] = []
     for (const videoId of videos) {
       try {

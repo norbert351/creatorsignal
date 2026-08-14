@@ -98,6 +98,56 @@ describe('api server', () => {
     })
     expect(response.statusCode).toBe(404)
   })
+
+  it('returns no profile before onboarding', async () => {
+    const response = await server.inject({ method: 'GET', url: '/api/profile' })
+    expect(response.statusCode).toBe(200)
+    const body = response.json()
+    expect(body.user).toBeNull()
+    expect(body.targets).toEqual([])
+  })
+
+  it('onboards a creator profile', async () => {
+    const response = await server.inject({
+      method: 'POST',
+      url: '/api/profile',
+      payload: { name: 'Demo Creator', handle: '@democreator' },
+    })
+    expect(response.statusCode).toBe(200)
+    const body = response.json()
+    expect(body.user.name).toBe('Demo Creator')
+    expect(body.user.handle).toBe('@democreator')
+    expect(store.listCreatorMemory('preference').some((m) => m.content.includes('creator profile'))).toBe(true)
+  })
+
+  it('adds and removes a connected target', async () => {
+    const add = await server.inject({
+      method: 'POST',
+      url: '/api/targets',
+      payload: { platform: 'youtube', kind: 'channel', value: 'UC8gjFgWDbSGvGDgpzjfjfoQ' },
+    })
+    expect(add.statusCode).toBe(200)
+    const added = add.json()
+    expect(added.target.platform).toBe('youtube')
+    expect(added.targets).toHaveLength(1)
+    expect(store.listTargets('local')).toHaveLength(1)
+
+    const del = await server.inject({ method: 'DELETE', url: `/api/targets/${added.target.id}` })
+    expect(del.statusCode).toBe(200)
+    expect(del.json().targets).toHaveLength(0)
+
+    const missing = await server.inject({ method: 'DELETE', url: '/api/targets/nope' })
+    expect(missing.statusCode).toBe(404)
+  })
+
+  it('rejects an invalid target payload', async () => {
+    const response = await server.inject({
+      method: 'POST',
+      url: '/api/targets',
+      payload: { platform: 'myspace', kind: 'channel', value: '' },
+    })
+    expect(response.statusCode).toBe(400)
+  })
 })
 
 describe('api auth', () => {

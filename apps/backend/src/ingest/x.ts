@@ -31,10 +31,14 @@ export class XIngestor {
 
   /** Pulls new tweets for all configured targets and stores them. */
   async ingestNew(store: Store): Promise<Comment[]> {
+    // Merge per-creator targets stored via the onboarding API (live, no restart).
+    const dbTargets = store.listTargets().filter((t) => t.platform === 'x')
+    const userIds = [...this.userIds, ...dbTargets.filter((t) => t.kind === 'user').map((t) => t.value)]
+    const query = dbTargets.find((t) => t.kind === 'query')?.value ?? this.query
     const inserted: Comment[] = []
     const targets: Array<{ kind: 'user' | 'query'; value: string }> = []
-    if (this.query) targets.push({ kind: 'query', value: this.query })
-    for (const userId of this.userIds) targets.push({ kind: 'user', value: userId })
+    if (query) targets.push({ kind: 'query', value: query })
+    for (const userId of userIds) targets.push({ kind: 'user', value: userId })
     for (const target of targets) {
       inserted.push(...(await this.ingestTarget(store, target)))
     }

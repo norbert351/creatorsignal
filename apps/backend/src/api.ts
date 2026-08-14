@@ -27,6 +27,20 @@ const pipelineBodySchema = z.object({
     .default(['ingest', 'distill', 'relay']),
 })
 
+const profileBodySchema = z.object({
+  name: z.string().min(1).max(80),
+  handle: z.string().min(1).max(80),
+})
+
+const targetBodySchema = z.object({
+  platform: z.enum(['youtube', 'tiktok', 'x', 'telegram']),
+  kind: z.enum(['channel', 'video', 'user', 'query', 'group']),
+  value: z.string().min(1).max(500),
+})
+
+/** Single-creator workspace id for the jam demo (multi-tenant auth is post-jam). */
+const DEFAULT_USER_ID = 'local'
+
 export interface ServerDeps {
   store: Store
   gateway: MindGateway
@@ -138,6 +152,69 @@ export function buildServer(deps: ServerDeps) {
       .object({ minScore: z.coerce.number().int().min(0).max(100).optional() })
       .parse(request.query)
     return { fans: store.listFans(query.minScore ?? 0) }
+  })
+
+  // -------------------------------------------------------------------------
+  // Creator onboarding: profile + connected targets
+  // -------------------------------------------------------------------------
+
+  server.get('/api/profile', async () => {
+    const user = store.getUser(DEFAULT_USER_ID)
+    return { user, targets: store.listTargets(DEFAULT_USER_ID) }
+  })
+
+  server.post('/api/profile', async (request, reply) => {
+    const body = profileBodySchema.safeParse(request.body)
+    if (!body.success) {
+      return reply.code(400).send({ error: 'invalid_body', issues: body.error.issues })
+    }
+    store.upsertUser({
+      id: DEFAULT_USER_ID,
+      name: body.data.name,
+      handle: body.data.handle,
+      createdAt: new Date().toISOString(),
+    })
+    store.insertCreatorMemory({
+      id: randomUUID(),
+      kind: 'preference',
+      content: `creator profile: ${body.data.name} (${body.data.handle})`,
+      refId: DEFAULT_USER_ID,
+      createdAt: new Date().toISOString(),
+    })
+    return { user: store.getUser(DEFAULT_USER_ID), targets: store.listTargets(DEFAULT_USER_ID) }
+  })
+
+  server.post('/api/targets', async (request, reply) => {
+    const body = targetBodySchema.safeParse(request.body)
+    if (!body.success) {
+      return reply.code(400).send({ error: 'invalid_body', issues: body.error.issues })
+    }
+    const target = {
+      id: randomUUID(),
+      userId: DEFAULT_USER_ID,
+      platform: body.data.platform,
+      kind: body.data.kind,
+      value: body.data.value,
+      createdAt: new Date().toISOString(),
+    }
+    store.addTarget(target)
+    store.insertCreatorMemory({
+      id: randomUUID(),
+      kind: 'preference',
+      content: `connected ${target.platform} ${target.kind}: ${target.value}`,
+      refId: target.id,
+      createdAt: new Date().toISOString(),
+    })
+    return { ok: true, target, targets: store.listTargets(DEFAULT_USER_ID) }
+  })
+
+  server.delete('/api/targets/:id', async (request, reply) => {
+    const params = z.object({ id: z.string().min(1) }).parse(request.params)
+    const removed = store.removeTarget(params.id)
+    if (!removed) {
+      return reply.code(404).send({ error: 'not_found' })
+    }
+    return { ok: true, targets: store.listTargets(DEFAULT_USER_ID) }
   })
 
   server.get('/api/memory', async (request) => {
