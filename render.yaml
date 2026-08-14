@@ -1,0 +1,38 @@
+# CreatorSignal — Render blueprint.
+# Deploy: "New +" > "Blueprint" > connect github.com/norbert351/creatorsignal,
+# or "New Web Service" pointing at the repo root.
+
+services:
+  - type: web
+    name: creatorsignal
+    runtime: node
+    repo: https://github.com/norbert351/creatorsignal
+    rootDir: apps/backend
+    buildCommand: pnpm install --prod=false && pnpm build
+    startCommand: node dist/index.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: '22'
+      - key: CREATORSIGNAL_PORT
+        value: '10000'
+      - key: CREATORSIGNAL_MIND_MODE
+        value: simulated
+      - key: CREATORSIGNAL_INGEST_INTERVAL_MIN
+        value: '30'
+      - key: CREATORSIGNAL_INGEST_DAYS_BACK
+        value: '60'
+      - key: CREATORSIGNAL_YOUTUBE_API_KEY
+        sync: false
+      - key: CREATORSIGNAL_YOUTUBE_CHANNEL_ID
+        sync: false
+      - key: CREATORSIGNAL_YOUTUBE_VIDEO_IDS
+        sync: false
+      - key: CREATORSIGNAL_LLM_API_KEY
+        sync: false
+      - key: CREATORSIGNAL_LLM_BASE_URL
+        sync: false
+      - key: CREATORSIGNAL_LLM_MODEL
+        sync: false
+      - key: CREATORSIGNAL_API_TOKEN
+        sync: false
