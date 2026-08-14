@@ -61,8 +61,15 @@ export class LlmClient {
     const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> }
     const content = data.choices?.[0]?.message?.content
     if (!content) throw new Error('llm classify returned no content')
-    const parsed = llmResultSchema.safeParse(JSON.parse(content))
+    const parsed = llmResultSchema.safeParse(JSON.parse(stripCodeFences(content)))
     if (!parsed.success) throw new Error('llm classify returned malformed JSON')
     return parsed.data.results
   }
+}
+
+/** Some models wrap JSON responses in markdown code fences — strip them. */
+function stripCodeFences(content: string): string {
+  const trimmed = content.trim()
+  const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/)
+  return fenced?.[1] ?? trimmed
 }
