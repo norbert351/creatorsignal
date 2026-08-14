@@ -37,26 +37,27 @@ export class YoutubeIngestor {
   ) {}
 
   async resolveVideoIds(): Promise<string[]> {
-    if (this.videoIds.length > 0) return this.videoIds
-    if (!this.channelId) return []
-    const channels = await this.getJson(
-      'channels',
-      { part: 'contentDetails', id: this.channelId },
-    )
-    const channelItems = (channels?.items ?? []) as ChannelItem[]
-    const uploads = channelItems[0]?.contentDetails?.relatedPlaylists?.uploads
-    if (!uploads) return []
-    const playlist = await this.getJson('playlistItems', {
-      part: 'contentDetails',
-      playlistId: uploads,
-      maxResults: '50',
-    })
-    const ids: string[] = []
-    for (const item of (playlist?.items ?? []) as PlaylistItem[]) {
-      const videoId = item?.contentDetails?.videoId
-      if (videoId) ids.push(videoId)
+    const ids = new Set(this.videoIds)
+    if (this.channelId) {
+      const channels = await this.getJson(
+        'channels',
+        { part: 'contentDetails', id: this.channelId },
+      )
+      const channelItems = (channels?.items ?? []) as ChannelItem[]
+      const uploads = channelItems[0]?.contentDetails?.relatedPlaylists?.uploads
+      if (uploads) {
+        const playlist = await this.getJson('playlistItems', {
+          part: 'contentDetails',
+          playlistId: uploads,
+          maxResults: '50',
+        })
+        for (const item of (playlist?.items ?? []) as PlaylistItem[]) {
+          const videoId = item?.contentDetails?.videoId
+          if (videoId) ids.add(videoId)
+        }
+      }
     }
-    return ids
+    return [...ids]
   }
 
   /** Pulls new comments for all known videos and stores them. */
@@ -64,7 +65,13 @@ export class YoutubeIngestor {
     const videos = await this.resolveVideoIds()
     const inserted: Comment[] = []
     for (const videoId of videos) {
-      inserted.push(...(await this.ingestVideo(store, videoId)))
+      try {
+        inserted.push(...(await this.ingestVideo(store, videoId)))
+      } catch (error) {
+        // A single video (e.g. comments disabled) must never kill the run.
+        const message = error instanceof Error ? error.message : String(error)
+        console.warn(`[youtube] skipping video ${videoId}: ${message}`)
+      }
     }
     return inserted
   }
