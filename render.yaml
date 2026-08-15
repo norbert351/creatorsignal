@@ -8,7 +8,9 @@ services:
     runtime: node
     repo: https://github.com/norbert351/creatorsignal
     rootDir: apps/backend
-    buildCommand: pnpm install --prod=false && pnpm build
+    # Workspace packages (shared, mind-client) resolve via ./dist and are not
+    # committed, so build them first in dependency order, then the backend.
+    buildCommand: pnpm install --prod=false && pnpm --filter @creatorsignal/shared build && pnpm --filter @creatorsignal/mind-client build && pnpm build
     startCommand: node dist/index.js
     healthCheckPath: /health
     envVars:
@@ -22,17 +24,35 @@ services:
         value: '30'
       - key: CREATORSIGNAL_INGEST_DAYS_BACK
         value: '60'
+      # Seed the Bir Tawil demo fixture on first boot (config default is off).
+      - key: CREATORSIGNAL_SEED_ON_BOOT
+        value: 'true'
       - key: CREATORSIGNAL_YOUTUBE_API_KEY
         sync: false
       - key: CREATORSIGNAL_YOUTUBE_CHANNEL_ID
         sync: false
       - key: CREATORSIGNAL_YOUTUBE_VIDEO_IDS
         sync: false
+      - key: CREATORSIGNAL_TIKTOK_API_KEY
+        sync: false
+      - key: CREATORSIGNAL_TIKTOK_VIDEO_IDS
+        sync: false
+      - key: CREATORSIGNAL_X_BEARER_TOKEN
+        sync: false
+      - key: CREATORSIGNAL_X_USER_IDS
+        sync: false
+      - key: CREATORSIGNAL_X_QUERY
+        sync: false
       - key: CREATORSIGNAL_LLM_API_KEY
         sync: false
       - key: CREATORSIGNAL_LLM_BASE_URL
         sync: false
       - key: CREATORSIGNAL_LLM_MODEL
+        sync: false
+      # Only needed if CREATORSIGNAL_MIND_MODE=telegram
+      - key: CREATORSIGNAL_TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: CREATORSIGNAL_TELEGRAM_GROUP_ID
         sync: false
       - key: CREATORSIGNAL_API_TOKEN
         sync: false
