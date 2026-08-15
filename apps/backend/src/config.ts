@@ -30,7 +30,6 @@ export const configSchema = z.object({
   briefTime: z.string().regex(/^\d{2}:\d{2}$/, 'must be HH:MM').default('09:00'),
   minDemandScore: z.coerce.number().int().nonnegative().default(25),
   superfanThreshold: z.coerce.number().int().nonnegative().default(30),
-  seedOnBoot: z.coerce.boolean().default(false),
   ingestDaysBack: z.coerce.number().int().positive().default(30),
   /** When set, /api/* requires `authorization: Bearer <token>`. */
   apiToken: z.string().min(8).optional(),

@@ -5,14 +5,13 @@ import cors from '@fastify/cors'
 import fastifyStatic from '@fastify/static'
 import Fastify from 'fastify'
 import { z } from 'zod'
-import { DECISION_VALUES, normalizeTopic } from '@creatorsignal/shared'
+import { DECISION_VALUES } from '@creatorsignal/shared'
 import { draftReply } from '@creatorsignal/mind-client'
 import type { MindGateway } from '@creatorsignal/mind-client'
 import type { Config } from './config.js'
 import type { Store } from './db.js'
-import type { PipelineDeps, PipelineSummary } from './pipeline.js'
+import type { PipelineDeps } from './pipeline.js'
 import { runPipeline } from './pipeline.js'
-import { buildDemoComments, seedDatabase } from './seed.js'
 import type { Stage } from './pipeline.js'
 import { composeContentBrief } from './brief.js'
 import type { TelegramNotifier } from './telegram-notify.js'
@@ -327,30 +326,6 @@ export function buildServer(deps: ServerDeps) {
     const stages: Stage[] = body.success ? body.data.stages : ['ingest', 'distill', 'relay']
     const summary = await runPipeline(pipelineDeps, stages)
     return { ok: true, summary }
-  })
-
-  server.post('/api/seed/reset', async (request, reply) => {
-    const count = seedDatabase(store)
-    const summary: PipelineSummary = await runPipeline(pipelineDeps, ['distill', 'relay'])
-    return { ok: true, seeded: count, summary }
-  })
-
-  // Convenience for demos: list what topics the fixture dataset contains.
-  server.get('/api/seed/preview', async () => {
-    const comments = buildDemoComments()
-    const topics = new Map<string, number>()
-    for (const comment of comments) {
-      const key = normalizeTopic(comment.text)
-      topics.set(key, (topics.get(key) ?? 0) + 1)
-    }
-    return {
-      comments: comments.length,
-      videos: [...new Set(comments.map((c) => c.videoId))].length,
-      topTopics: [...topics.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 10)
-        .map(([topic, count]) => ({ topic, count })),
-    }
   })
 
   return server

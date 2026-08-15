@@ -16,7 +16,7 @@ async function api(path, options = {}) {
   const response = await fetch(apiUrl(path), { ...options, headers })
   if (!response.ok) {
     if (response.status === 401 && !token) {
-      // Prompt once for the demo token, then retry.
+      // Prompt once for the API token, then retry.
       const entered = prompt('Enter the CreatorSignal API token (see CREATORSIGNAL_API_TOKEN):')
       if (entered) {
         localStorage.setItem(TOKEN_KEY, entered)

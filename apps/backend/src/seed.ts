@@ -3,7 +3,7 @@ import { normalizeTopic, topicLabel } from '@creatorsignal/shared'
 import type { Store } from './db.js'
 
 // ---------------------------------------------------------------------------
-// Deterministic demo dataset for the Creative Minds Jam.
+// Deterministic dataset used as a TEST FIXTURE (never wired into the runtime).
 //
 // The story: a geography/history creator whose audience keeps asking the same
 // unanswered question about Bir Tawil across six videos. 47 asks, 12 highly

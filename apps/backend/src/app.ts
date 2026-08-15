@@ -10,7 +10,6 @@ import { TiktokIngestor } from './ingest/tiktok.js'
 import { XIngestor } from './ingest/x.js'
 import { YoutubeIngestor } from './ingest/youtube.js'
 import type { PipelineDeps } from './pipeline.js'
-import { seedDatabase } from './seed.js'
 import { TelegramNotifier } from './telegram-notify.js'
 import { startWorkers } from './workers.js'
 
@@ -59,11 +58,6 @@ function handleFromMind(store: Store): (message: FromMindMessage) => Promise<voi
 export function createApp(config: Config, mindModeOverride?: 'simulated' | 'telegram'): App {
   const store = new Store(config.dbPath)
   const mode = mindModeOverride ?? config.mindMode
-
-  if (config.seedOnBoot && store.stats().comments === 0) {
-    const seeded = seedDatabase(store)
-    console.log(`[app] seeded demo dataset: ${seeded} comments`)
-  }
 
   let gateway: MindGateway
   if (mode === 'telegram') {

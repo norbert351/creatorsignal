@@ -24,9 +24,6 @@ services:
         value: '30'
       - key: CREATORSIGNAL_INGEST_DAYS_BACK
         value: '60'
-      # Seed the Bir Tawil demo fixture on first boot (config default is off).
-      - key: CREATORSIGNAL_SEED_ON_BOOT
-        value: 'true'
       - key: CREATORSIGNAL_YOUTUBE_API_KEY
         sync: false
       - key: CREATORSIGNAL_YOUTUBE_CHANNEL_ID
