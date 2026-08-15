@@ -25,6 +25,9 @@ export const configSchema = z.object({
   telegramGroupId: z.string().optional(),
   ingestIntervalMin: z.coerce.number().int().positive().default(30),
   digestTime: z.string().regex(/^\d{2}:\d{2}$/, 'must be HH:MM').default('09:00'),
+  /** Weekly content brief: day of week (0=Sunday..6=Saturday) + time. */
+  briefDay: z.coerce.number().int().min(0).max(6).default(1),
+  briefTime: z.string().regex(/^\d{2}:\d{2}$/, 'must be HH:MM').default('09:00'),
   minDemandScore: z.coerce.number().int().nonnegative().default(25),
   superfanThreshold: z.coerce.number().int().nonnegative().default(30),
   seedOnBoot: z.coerce.boolean().default(false),

@@ -267,6 +267,26 @@ em { font-style: italic; }
 .pf-input input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .pf-input input::placeholder { color: var(--text-3); font-size: 0.75rem; }
 
+.tg-status {
+  font-size: 0.75rem;
+  color: var(--text-3);
+  min-height: 1.1em;
+  line-height: 1.5;
+  word-break: break-word;
+}
+.tg-status.on { color: var(--accent); }
+.linklike {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: var(--text-3);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.linklike:hover { color: var(--text-1); }
+
 .pf-targets { display: flex; flex-direction: column; gap: 0.4rem; min-height: 0.6rem; }
 .tchip {
   display: flex;

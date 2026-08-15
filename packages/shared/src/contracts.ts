@@ -22,7 +22,7 @@ export type DecisionValue = (typeof DECISION_VALUES)[number]
 export const DIGEST_ITEM_TYPES = ['opportunity', 'fan', 'alert'] as const
 export type DigestItemType = (typeof DIGEST_ITEM_TYPES)[number]
 
-export const CREATOR_MEMORY_KINDS = ['decision', 'covered', 'note', 'goal', 'preference', 'draft'] as const
+export const CREATOR_MEMORY_KINDS = ['decision', 'covered', 'note', 'goal', 'preference', 'draft', 'brief'] as const
 export type CreatorMemoryKind = (typeof CREATOR_MEMORY_KINDS)[number]
 
 // ---------------------------------------------------------------------------

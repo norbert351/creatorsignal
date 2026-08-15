@@ -8,6 +8,7 @@ import { buildServer } from './api.js'
 import { distillComments } from './distill/distiller.js'
 import { runPipeline, type PipelineDeps } from './pipeline.js'
 import { buildDemoComments, seedDatabase } from './seed.js'
+import { TelegramNotifier } from './telegram-notify.js'
 
 function makeConfig(overrides: Record<string, string> = {}): Config {
   return loadConfig(overrides)
@@ -32,7 +33,13 @@ describe('api server', () => {
     store = new Store(':memory:')
     seedDatabase(store)
     await runPipeline(makeDeps(store), ['distill', 'relay'])
-    server = buildServer({ store, gateway: new SimulatedMindGateway(), pipelineDeps: makeDeps(store), config: makeConfig() })
+    server = buildServer({
+      store,
+      gateway: new SimulatedMindGateway(),
+      pipelineDeps: makeDeps(store),
+      config: makeConfig(),
+      notify: new TelegramNotifier({ store }),
+    })
     await server.ready()
   })
 
@@ -163,6 +170,99 @@ describe('api server', () => {
   })
 })
 
+describe('api telegram settings', () => {
+  let store: Store
+  let server: FastifyInstance
+
+  beforeAll(async () => {
+    store = new Store(':memory:')
+    seedDatabase(store)
+    server = buildServer({
+      store,
+      gateway: new SimulatedMindGateway(),
+      pipelineDeps: makeDeps(store),
+      config: makeConfig(),
+      notify: new TelegramNotifier({ store }),
+    })
+    await server.ready()
+  })
+
+  afterAll(async () => {
+    await server.close()
+    store.close()
+  })
+
+  it('reports not enabled before any config', async () => {
+    const response = await server.inject({ method: 'GET', url: '/api/settings/telegram' })
+    expect(response.statusCode).toBe(200)
+    const body = response.json()
+    expect(body.ok).toBe(true)
+    expect(body.enabled).toBe(false)
+  })
+
+  it('rejects a garbage bot token', async () => {
+    const response = await server.inject({
+      method: 'POST',
+      url: '/api/settings/telegram',
+      payload: { botToken: '123456:not-a-real-token', groupId: '@somegroup' },
+    })
+    expect(response.statusCode).toBe(400)
+  })
+
+  it('validates the payload shape', async () => {
+    const response = await server.inject({
+      method: 'POST',
+      url: '/api/settings/telegram',
+      payload: { botToken: 'x' },
+    })
+    expect(response.statusCode).toBe(400)
+    expect(response.json().error).toBe('invalid_body')
+  })
+})
+
+describe('api weekly brief', () => {
+  let store: Store
+  let server: FastifyInstance
+
+  beforeAll(async () => {
+    store = new Store(':memory:')
+    seedDatabase(store)
+    await runPipeline(makeDeps(store), ['distill', 'relay'])
+    server = buildServer({
+      store,
+      gateway: new SimulatedMindGateway(),
+      pipelineDeps: makeDeps(store),
+      config: makeConfig(),
+      notify: new TelegramNotifier({ store }),
+    })
+    await server.ready()
+  })
+
+  afterAll(async () => {
+    await server.close()
+    store.close()
+  })
+
+  it('has no brief before generation', async () => {
+    const response = await server.inject({ method: 'GET', url: '/api/brief/latest' })
+    expect(response.statusCode).toBe(200)
+    expect(response.json().brief).toBeNull()
+  })
+
+  it('generates and returns a brief with evidence', async () => {
+    const response = await server.inject({ method: 'POST', url: '/api/brief/generate' })
+    expect(response.statusCode).toBe(200)
+    const body = response.json()
+    expect(body.ok).toBe(true)
+    expect(body.brief.items.length).toBeGreaterThan(0)
+    expect(body.brief.headline.length).toBeGreaterThan(0)
+
+    const latest = await server.inject({ method: 'GET', url: '/api/brief/latest' })
+    const latestBody = latest.json()
+    expect(latestBody.brief.items.length).toBe(body.brief.items.length)
+  })
+})
+
 describe('api auth', () => {
   let store: Store
   let server: FastifyInstance
@@ -171,7 +271,13 @@ describe('api auth', () => {
     store = new Store(':memory:')
     seedDatabase(store)
     const config = makeConfig({ CREATORSIGNAL_API_TOKEN: 'test-secret-123' })
-    server = buildServer({ store, gateway: new SimulatedMindGateway(), pipelineDeps: makeDeps(store), config })
+    server = buildServer({
+      store,
+      gateway: new SimulatedMindGateway(),
+      pipelineDeps: makeDeps(store),
+      config,
+      notify: new TelegramNotifier({ store }),
+    })
     await server.ready()
   })
 

@@ -49,10 +49,16 @@ services:
         sync: false
       - key: CREATORSIGNAL_LLM_MODEL
         sync: false
-      # Only needed if CREATORSIGNAL_MIND_MODE=telegram
+      # Only needed if CREATORSIGNAL_MIND_MODE=telegram (real Mind relay).
+      # The demo push channel is configured by each creator from the web
+      # onboarding (Telegram push card) — no env required.
       - key: CREATORSIGNAL_TELEGRAM_BOT_TOKEN
         sync: false
       - key: CREATORSIGNAL_TELEGRAM_GROUP_ID
+        sync: false
+      - key: CREATORSIGNAL_BRIEF_DAY
+        sync: false
+      - key: CREATORSIGNAL_BRIEF_TIME
         sync: false
       - key: CREATORSIGNAL_API_TOKEN
         sync: false

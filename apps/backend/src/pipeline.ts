@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { Comment, Digest, Signal } from '@creatorsignal/shared'
 import type { MindGateway } from '@creatorsignal/mind-client'
 import type { Store } from './db.js'
+import type { TelegramNotifier } from './telegram-notify.js'
 
 export type Stage = 'ingest' | 'distill' | 'relay'
 
@@ -14,6 +15,8 @@ export interface PipelineDeps {
   store: Store
   minDemandScore: number
   superfanThreshold: number
+  /** Optional push channel: notifies the creator's Telegram group. */
+  notify?: TelegramNotifier
 }
 
 export interface PipelineSummary {
@@ -68,9 +71,10 @@ export async function runPipeline(deps: PipelineDeps, stages: Stage[]): Promise<
     }
     const result = await gateway.processSignals(signals, ctx)
     summary.relayed = signals.length
-    summary.opportunitiesCreated = result.opportunities.filter(
+    const created = result.opportunities.filter(
       (o) => ctx.opportunities.findIndex((p) => p.topic === o.topic) === -1,
-    ).length
+    )
+    summary.opportunitiesCreated = created.length
     for (const opportunity of result.opportunities) store.upsertOpportunity(opportunity)
     summary.opportunitiesUpdated = result.opportunities.length - summary.opportunitiesCreated
     for (const fan of result.fans) store.upsertFan(fan)
@@ -83,6 +87,11 @@ export async function runPipeline(deps: PipelineDeps, stages: Stage[]): Promise<
       }
       store.insertDigest(digest)
       summary.digestItems = result.digestItems.length
+    }
+    // Push new opportunity cards to the creator's Telegram group (if configured).
+    // Fire-and-forget: a slow Telegram call must never block the pipeline.
+    for (const opportunity of created) {
+      void deps.notify?.opportunityCreated(opportunity)
     }
   }
 

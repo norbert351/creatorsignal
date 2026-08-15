@@ -11,12 +11,14 @@ import { XIngestor } from './ingest/x.js'
 import { YoutubeIngestor } from './ingest/youtube.js'
 import type { PipelineDeps } from './pipeline.js'
 import { seedDatabase } from './seed.js'
+import { TelegramNotifier } from './telegram-notify.js'
 import { startWorkers } from './workers.js'
 
 export interface App {
   store: Store
   gateway: MindGateway
   pipelineDeps: PipelineDeps
+  notify: TelegramNotifier
   start: () => Promise<void>
   stop: () => Promise<void>
 }
@@ -114,19 +116,30 @@ export function createApp(config: Config, mindModeOverride?: 'simulated' | 'tele
     superfanThreshold: config.superfanThreshold,
   }
 
-  const server = buildServer({ store, gateway, pipelineDeps, config })
+  const notify = new TelegramNotifier({
+    store,
+    fallbackBotToken: config.telegramBotToken,
+    log: (level, message) => console.log(`[telegram] ${level}: ${message}`),
+  })
+  pipelineDeps.notify = notify
+
+  const server = buildServer({ store, gateway, pipelineDeps, config, notify })
   const workers = startWorkers({
     store,
     gateway,
     pipelineDeps,
     ingestIntervalMin: config.ingestIntervalMin,
     digestTime: config.digestTime,
+    briefDay: config.briefDay,
+    briefTime: config.briefTime,
+    notify,
   })
 
   return {
     store,
     gateway,
     pipelineDeps,
+    notify,
     start: async () => {
       await gateway.start?.()
       await server.listen({ port: config.port, host: '0.0.0.0' })

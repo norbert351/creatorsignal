@@ -103,14 +103,17 @@
     <div class="pf-card" data-platform="telegram">
       <div class="pf-head">
         <span class="pf-icon tg">✈</span>
-        <span class="pf-name">Telegram</span>
+        <span class="pf-name">Telegram push</span>
       </div>
-      <p class="pf-desc">Group or channel where the Mind pushes digests</p>
+      <p class="pf-desc">Mind pushes opportunity cards & digests to your group</p>
       <div class="pf-input">
-        <input type="text" data-target-input="telegram" placeholder="t.me/yourgroup" />
-        <button class="btn btn-mini" data-target-add="telegram">Connect</button>
+        <input type="password" id="tg-token" placeholder="Bot token from @BotFather" autocomplete="off" />
       </div>
-      <div class="pf-targets" data-target-list="telegram"></div>
+      <div class="pf-input">
+        <input type="text" id="tg-group" placeholder="t.me/yourgroup" autocomplete="off" />
+        <button class="btn btn-mini" id="tg-connect">Connect</button>
+      </div>
+      <div class="tg-status" id="tg-status"></div>
     </div>
   </div>
 </section>
@@ -138,6 +141,15 @@
       <button data-platform="x" class="chip">X</button>
     </div>
     <div id="comments" class="list"></div>
+  </div>
+
+  <div class="card wide">
+    <h3>📝 Weekly content brief</h3>
+    <p class="hint">The Mind drafts what to make next, with evidence, every week. Pushed to your Telegram group when connected.</p>
+    <div id="brief" class="list"></div>
+    <div class="actions" style="margin-top: 0.6rem">
+      <button id="generate-brief" class="btn btn-secondary btn-mini">Generate now</button>
+    </div>
   </div>
 
   <div class="card">

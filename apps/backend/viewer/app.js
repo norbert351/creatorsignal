@@ -40,7 +40,6 @@ const KIND_HINTS = {
   youtube: (value) => (/watch\?v=|youtu\.be\//.test(value) ? 'video' : 'channel'),
   tiktok: () => 'video',
   x: (value) => (/^\s*@/.test(value) ? 'user' : 'query'),
-  telegram: () => 'group',
 }
 
 let currentPlatform = 'all'
@@ -133,6 +132,78 @@ function bindOnboarding() {
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') doAdd()
     })
+  }
+
+  bindTelegramBot()
+}
+
+function renderTelegramStatus(status) {
+  const box = document.getElementById('tg-status')
+  if (!box) return
+  if (!status.enabled) {
+    box.innerHTML = ''
+    box.classList.remove('on')
+    return
+  }
+  const name = status.botName ? `@${status.botName}` : 'bot'
+  const target = status.chatTitle || status.groupIdMasked || 'group'
+  const disconnect = document.createElement('button')
+  disconnect.className = 'linklike'
+  disconnect.textContent = 'Disconnect'
+  disconnect.onclick = async () => {
+    try {
+      const res = await api('/settings/telegram', { method: 'DELETE' })
+      renderTelegramStatus(res)
+      box.innerHTML = ''
+      box.classList.remove('on')
+    } catch (error) {
+      console.error('telegram disconnect failed', error)
+    }
+  }
+  box.classList.add('on')
+  box.textContent = `✅ Connected · ${name} → ${target} · `
+  box.append(disconnect)
+}
+
+function bindTelegramBot() {
+  const connect = document.getElementById('tg-connect')
+  const status = document.getElementById('tg-status')
+  if (!connect || !status) return
+  connect.onclick = async () => {
+    const botToken = document.getElementById('tg-token').value.trim()
+    const groupId = document.getElementById('tg-group').value.trim()
+    if (!botToken || !groupId) return
+    connect.disabled = true
+    status.textContent = 'Connecting…'
+    try {
+      const res = await api('/settings/telegram', {
+        method: 'POST',
+        body: JSON.stringify({ botToken, groupId }),
+      })
+      document.getElementById('tg-token').value = ''
+      document.getElementById('tg-group').value = ''
+      renderTelegramStatus(res)
+    } catch (error) {
+      status.textContent = `❌ ${error instanceof Error ? error.message : 'connect failed'}`
+    } finally {
+      connect.disabled = false
+    }
+  }
+  const tokenField = document.getElementById('tg-token')
+  tokenField.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') connect.onclick()
+  })
+  document.getElementById('tg-group').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') connect.onclick()
+  })
+}
+
+async function loadTelegramStatus() {
+  try {
+    const res = await api('/settings/telegram')
+    renderTelegramStatus(res)
+  } catch (error) {
+    console.error('telegram status load failed', error)
   }
 }
 
@@ -267,11 +338,59 @@ function renderDigests(digests) {
   }
 }
 
+function renderBrief(brief) {
+  const wrap = document.getElementById('brief')
+  wrap.innerHTML = ''
+  if (!brief) {
+    wrap.append(el('div', 'empty', 'No brief yet — generate one or wait for the weekly push.'))
+    return
+  }
+  const head = el('div', 'item')
+  head.append(el('div', 'sub', `For ${brief.period} · generated ${new Date(brief.generatedAt).toLocaleDateString()}`))
+  head.append(el('div', 'text', brief.headline))
+  wrap.append(head)
+  for (const item of brief.items) {
+    const card = el('div', 'item')
+    const row = el('div', 'row')
+    row.append(el('span', '', `#${item.topicLabel}`), el('span', `pill-sm demand`, `${Math.round(item.demandScore)}`))
+    card.append(row)
+    const meta = el('div', 'sub', `${item.repeatCount} repeats · ${item.videoCount} videos${item.askers.length ? ` · asked by ${item.askers.join(', ')}` : ''}`)
+    card.append(meta)
+    card.append(el('div', 'text', item.angle))
+    wrap.append(card)
+  }
+}
+
+async function loadBrief() {
+  try {
+    const res = await api('/brief/latest')
+    renderBrief(res.brief)
+  } catch (error) {
+    console.error('brief load failed', error)
+  }
+}
+
+async function generateBrief() {
+  const btn = document.getElementById('generate-brief')
+  btn.disabled = true
+  btn.textContent = 'Drafting…'
+  try {
+    const res = await api('/brief/generate', { method: 'POST' })
+    renderBrief(res.brief)
+  } catch (error) {
+    console.error('brief generate failed', error)
+  } finally {
+    btn.disabled = false
+    btn.textContent = 'Generate now'
+  }
+}
+
 // ------------------------------------------------------------------- data
 
 async function refresh() {
-  const [health, opportunities, fans, comments, digests] = await Promise.all([
-    api('/health'),
+  // /health is intentionally public (auth-exempt) and lives outside /api.
+  const health = await fetch('/health').then((r) => r.json())
+  const [opportunities, fans, comments, digests] = await Promise.all([
     api('/opportunities'),
     api('/fans'),
     api('/comments?limit=200'),
@@ -301,6 +420,7 @@ async function runPipeline() {
 document.addEventListener('DOMContentLoaded', () => {
   bindOnboarding()
   document.getElementById('run-pipeline').onclick = runPipeline
+  document.getElementById('generate-brief').onclick = generateBrief
   document.getElementById('platform-filter').addEventListener('click', (e) => {
     const btn = e.target.closest('.chip')
     if (!btn) return
@@ -309,5 +429,7 @@ document.addEventListener('DOMContentLoaded', () => {
     void refresh()
   })
   void loadOnboarding()
+  void loadTelegramStatus()
+  void loadBrief()
   void refresh()
 })

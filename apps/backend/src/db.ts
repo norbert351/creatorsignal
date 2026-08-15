@@ -115,6 +115,14 @@ CREATE TABLE IF NOT EXISTS targets (
 );
 CREATE INDEX IF NOT EXISTS idx_targets_user ON targets(user_id);
 CREATE INDEX IF NOT EXISTS idx_targets_platform ON targets(platform);
+
+CREATE TABLE IF NOT EXISTS settings (
+  user_id TEXT NOT NULL,
+  key TEXT NOT NULL,
+  value TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, key)
+);
 `
 
 interface RawRow {
@@ -599,6 +607,42 @@ export class Store {
   removeTarget(id: string): boolean {
     const result = this.db.prepare('DELETE FROM targets WHERE id = ?').run(id)
     return Number(result.changes) > 0
+  }
+
+  // -------------------------------------------------------------------------
+  // Settings (per-user key/value, e.g. the Telegram push config)
+  // -------------------------------------------------------------------------
+
+  setSetting(userId: string, key: string, value: string): void {
+    this.db
+      .prepare(
+        `INSERT INTO settings (user_id, key, value, updated_at) VALUES (?, ?, ?, ?)
+         ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+      )
+      .run(userId, key, value, new Date().toISOString())
+  }
+
+  getSetting(userId: string, key: string): string | null {
+    const row = this.db
+      .prepare('SELECT value FROM settings WHERE user_id = ? AND key = ?')
+      .get(userId, key) as RawRow | undefined
+    return row ? String(row.value) : null
+  }
+
+  deleteSetting(userId: string, key: string): boolean {
+    const result = this.db
+      .prepare('DELETE FROM settings WHERE user_id = ? AND key = ?')
+      .run(userId, key)
+    return Number(result.changes) > 0
+  }
+
+  listSettings(userId: string): Record<string, string> {
+    const rows = this.db
+      .prepare('SELECT key, value FROM settings WHERE user_id = ?')
+      .all(userId) as RawRow[]
+    const out: Record<string, string> = {}
+    for (const row of rows) out[String(row.key)] = String(row.value)
+    return out
   }
 
   // -------------------------------------------------------------------------

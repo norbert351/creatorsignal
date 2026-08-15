@@ -14,6 +14,8 @@ import type { PipelineDeps, PipelineSummary } from './pipeline.js'
 import { runPipeline } from './pipeline.js'
 import { buildDemoComments, seedDatabase } from './seed.js'
 import type { Stage } from './pipeline.js'
+import { composeContentBrief } from './brief.js'
+import type { TelegramNotifier } from './telegram-notify.js'
 
 const decisionBodySchema = z.object({
   decision: z.enum(DECISION_VALUES),
@@ -38,6 +40,11 @@ const targetBodySchema = z.object({
   value: z.string().min(1).max(500),
 })
 
+const telegramConfigSchema = z.object({
+  botToken: z.string().min(5).max(200),
+  groupId: z.string().min(1).max(200),
+})
+
 /** Single-creator workspace id for the jam demo (multi-tenant auth is post-jam). */
 const DEFAULT_USER_ID = 'local'
 
@@ -46,10 +53,11 @@ export interface ServerDeps {
   gateway: MindGateway
   pipelineDeps: PipelineDeps
   config: Config
+  notify: TelegramNotifier
 }
 
 export function buildServer(deps: ServerDeps) {
-  const { store, gateway, pipelineDeps, config } = deps
+  const { store, gateway, pipelineDeps, config, notify } = deps
   const server = Fastify({ logger: { level: config.logLevel } })
 
   void server.register(cors, { origin: true })
@@ -218,9 +226,71 @@ export function buildServer(deps: ServerDeps) {
     return { ok: true, targets: store.listTargets(DEFAULT_USER_ID) }
   })
 
+  // -------------------------------------------------------------------------
+  // Telegram push config (web-configurable delivery channel)
+  // -------------------------------------------------------------------------
+
+  server.get('/api/settings/telegram', async () => {
+    return { ok: true, ...notify.status() }
+  })
+
+  server.post('/api/settings/telegram', async (request, reply) => {
+    const body = telegramConfigSchema.safeParse(request.body)
+    if (!body.success) {
+      return reply.code(400).send({ error: 'invalid_body', issues: body.error.issues })
+    }
+    try {
+      const result = await notify.connect(body.data.botToken, body.data.groupId)
+      if (!result.ok) {
+        return reply.code(400).send({ error: 'invalid_bot_token', message: result.error })
+      }
+      return { ...result, ...notify.status() }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      return reply.code(400).send({ error: 'telegram_connect_failed', message })
+    }
+  })
+
+  server.delete('/api/settings/telegram', async () => {
+    notify.disconnect()
+    return { ok: true, ...notify.status() }
+  })
+
+  // -------------------------------------------------------------------------
+  // Weekly content brief (autonomous "make this next" plan)
+  // -------------------------------------------------------------------------
+
+  server.get('/api/brief/latest', async () => {
+    const entries = store.listCreatorMemory('brief')
+    if (entries.length === 0) return { ok: true, brief: null }
+    try {
+      return { ok: true, brief: JSON.parse(entries[0]!.content) as unknown }
+    } catch {
+      return { ok: true, brief: null }
+    }
+  })
+
+  server.post('/api/brief/generate', async () => {
+    const brief = composeContentBrief(store)
+    store.insertCreatorMemory({
+      id: `brief-${brief.id}`,
+      kind: 'brief',
+      content: JSON.stringify(brief),
+      refId: brief.id,
+      createdAt: brief.generatedAt,
+    })
+    // Push to Telegram when connected (fire-and-forget).
+    void notify.brief(brief)
+    return { ok: true, brief }
+  })
+
   server.get('/api/memory', async (request) => {
     const query = z
-      .object({ kind: z.enum(['decision', 'covered', 'note', 'goal', 'preference', 'draft']).optional() })
+      .object({
+        kind: z
+          .enum(['decision', 'covered', 'note', 'goal', 'preference', 'draft', 'brief'])
+          .optional(),
+      })
       .parse(request.query)
     return { memory: store.listCreatorMemory(query.kind) }
   })
