@@ -6,6 +6,7 @@ function signal(overrides: Partial<Signal>): Signal {
   return {
     id: 's',
     commentId: 'c',
+    platform: 'youtube',
     videoId: 'v1',
     authorId: 'a1',
     authorName: 'Fan One',
