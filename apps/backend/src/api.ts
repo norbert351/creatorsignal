@@ -54,10 +54,11 @@ export function buildServer(deps: ServerDeps) {
 
   void server.register(cors, { origin: true })
 
-  // Static viewer (pure client, no secrets).
+  // Static viewer (pure client, no secrets). The dashboard lives at /viewer/,
+  // the marketing landing at /.
   const viewerDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'viewer')
   void server.register(fastifyStatic, { root: viewerDir, prefix: '/viewer/' })
-  server.get('/', async (_request, reply) => reply.sendFile('index.html', viewerDir))
+  server.get('/', async (_request, reply) => reply.sendFile('landing.html', viewerDir))
 
   if (config.apiToken) {
     server.addHook('onRequest', async (request, reply) => {

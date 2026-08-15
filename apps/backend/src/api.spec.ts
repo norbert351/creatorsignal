@@ -49,6 +49,19 @@ describe('api server', () => {
     expect(body.stats.comments).toBe(103)
   })
 
+  it('serves the marketing landing at / and the dashboard at /viewer/', async () => {
+    const landing = await server.inject({ method: 'GET', url: '/' })
+    expect(landing.statusCode).toBe(200)
+    expect(landing.headers['content-type'] ?? '').toContain('text/html')
+    expect(landing.body).toContain('Your audience is telling you')
+    expect(landing.body).toContain('landing.css')
+
+    const dashboard = await server.inject({ method: 'GET', url: '/viewer/' })
+    expect(dashboard.statusCode).toBe(200)
+    expect(dashboard.body).toContain('Connect your audience')
+    expect(dashboard.body).toContain('style.css')
+  })
+
   it('serves seeded comments', async () => {
     const response = await server.inject({ method: 'GET', url: '/api/comments?limit=3' })
     expect(response.statusCode).toBe(200)
