@@ -313,6 +313,13 @@ function renderComments(comments) {
     const row = el('div', 'row')
     row.append(platformPill(c.platform), el('span', '', c.authorName), el('span', `pill-sm ${c.kind}`, c.kind))
     item.append(row)
+    if (c.videoTitle) {
+      const vlink = el('a', 'vid', `📺 ${c.videoTitle}`)
+      vlink.href = c.videoUrl || '#'
+      vlink.target = '_blank'
+      vlink.rel = 'noopener'
+      item.append(vlink)
+    }
     item.append(el('div', 'text', c.text))
     wrap.append(item)
   }

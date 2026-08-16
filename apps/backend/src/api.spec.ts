@@ -56,6 +56,27 @@ describe('api server', () => {
     expect(body.stats.comments).toBe(103)
   })
 
+  it('enriches comments and signals with the source video', async () => {
+    store.upsertVideo({
+      videoId: 'v1',
+      platform: 'youtube',
+      title: 'Why Bir Tawil Exists',
+      url: 'https://www.youtube.com/watch?v=v1',
+    })
+    const comments = await server.inject({ method: 'GET', url: '/api/comments?limit=200' })
+    const commentBody = comments.json() as { comments: Array<{ videoId: string; videoTitle?: string; videoUrl?: string }> }
+    const withVideo = commentBody.comments.find((c) => c.videoId === 'v1')
+    expect(withVideo).toBeDefined()
+    expect(withVideo?.videoTitle).toBe('Why Bir Tawil Exists')
+    expect(withVideo?.videoUrl).toBe('https://www.youtube.com/watch?v=v1')
+
+    const signals = await server.inject({ method: 'GET', url: '/api/signals' })
+    const signalBody = signals.json() as { signals: Array<{ videoId: string; videoTitle?: string }> }
+    const signal = signalBody.signals.find((s) => s.videoId === 'v1')
+    expect(signal).toBeDefined()
+    expect(signal?.videoTitle).toBe('Why Bir Tawil Exists')
+  })
+
   it('serves the marketing landing at / and the dashboard at /viewer/', async () => {
     const landing = await server.inject({ method: 'GET', url: '/' })
     expect(landing.statusCode).toBe(200)

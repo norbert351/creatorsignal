@@ -72,6 +72,7 @@ export class YoutubeIngestor {
       videoIds: dbTargets.filter((t) => t.kind === 'video').map((t) => t.value),
     }
     const videos = await this.resolveVideoIds(extra)
+    await this.cacheVideoTitles(store, videos)
     const inserted: Comment[] = []
     for (const videoId of videos) {
       try {
@@ -83,6 +84,35 @@ export class YoutubeIngestor {
       }
     }
     return inserted
+  }
+
+  /**
+   * Resolve titles for all known video ids (batched, max 50 per call) and
+   * cache them so the viewer can show which video each signal came from.
+   */
+  private async cacheVideoTitles(store: Store, videoIds: string[]): Promise<void> {
+    for (let i = 0; i < videoIds.length; i += 50) {
+      const batch = videoIds.slice(i, i + 50)
+      try {
+        const data = await this.getJson('videos', {
+          part: 'snippet',
+          id: batch.join(','),
+        })
+        for (const item of (data?.items ?? []) as Array<{ id?: string; snippet?: { title?: string } }>) {
+          if (!item.id) continue
+          store.upsertVideo({
+            videoId: item.id,
+            platform: 'youtube',
+            title: item.snippet?.title?.slice(0, 120) ?? item.id,
+            url: `https://www.youtube.com/watch?v=${item.id}`,
+          })
+        }
+      } catch (error) {
+        // Title resolution is a nice-to-have; never block comment ingest.
+        const message = error instanceof Error ? error.message : String(error)
+        console.warn(`[youtube] title cache failed: ${message}`)
+      }
+    }
   }
 
   private async ingestVideo(store: Store, videoId: string): Promise<Comment[]> {

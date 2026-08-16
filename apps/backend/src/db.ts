@@ -123,6 +123,14 @@ CREATE TABLE IF NOT EXISTS settings (
   updated_at TEXT NOT NULL,
   PRIMARY KEY (user_id, key)
 );
+
+CREATE TABLE IF NOT EXISTS videos (
+  video_id TEXT PRIMARY KEY,
+  platform TEXT NOT NULL,
+  title TEXT NOT NULL,
+  url TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
 `
 
 interface RawRow {
@@ -643,6 +651,29 @@ export class Store {
     const out: Record<string, string> = {}
     for (const row of rows) out[String(row.key)] = String(row.value)
     return out
+  }
+
+  // -------------------------------------------------------------------------
+  // Videos (title cache so the viewer can show where each signal came from)
+  // -------------------------------------------------------------------------
+
+  upsertVideo(video: { videoId: string; platform: string; title: string; url: string }): void {
+    this.db
+      .prepare(
+        `INSERT INTO videos (video_id, platform, title, url, updated_at) VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(video_id) DO UPDATE SET title = excluded.title, url = excluded.url, updated_at = excluded.updated_at`,
+      )
+      .run(video.videoId, video.platform, video.title, video.url, new Date().toISOString())
+  }
+
+  listVideos(): Array<{ videoId: string; platform: string; title: string; url: string }> {
+    const rows = this.db.prepare('SELECT * FROM videos ORDER BY updated_at DESC').all() as RawRow[]
+    return rows.map((r) => ({
+      videoId: String(r.video_id),
+      platform: String(r.platform),
+      title: String(r.title),
+      url: String(r.url),
+    }))
   }
 
   // -------------------------------------------------------------------------

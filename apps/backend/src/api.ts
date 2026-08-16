@@ -47,6 +47,26 @@ const telegramConfigSchema = z.object({
 /** Single-creator workspace id for the jam demo (multi-tenant auth is post-jam). */
 const DEFAULT_USER_ID = 'local'
 
+interface VideoMeta {
+  videoId: string
+  platform: string
+  title: string
+  url: string
+}
+
+function videoMap(store: Store): Map<string, VideoMeta> {
+  return new Map(store.listVideos().map((v) => [v.videoId, v]))
+}
+
+/** Attach the source video title + link to a comment or signal. */
+function withVideo<T extends { videoId: string }>(
+  item: T,
+  videos: Map<string, VideoMeta>,
+): T & { videoTitle: string | null; videoUrl: string | null } {
+  const video = videos.get(item.videoId)
+  return { ...item, videoTitle: video?.title ?? null, videoUrl: video?.url ?? null }
+}
+
 export interface ServerDeps {
   store: Store
   gateway: MindGateway
@@ -93,7 +113,8 @@ export function buildServer(deps: ServerDeps) {
       .parse(request.query)
     let signals = store.listSignals(query.kind)
     if (query.limit !== undefined) signals = signals.slice(-query.limit)
-    return { signals }
+    const videos = videoMap(store)
+    return { signals: signals.map((s) => withVideo(s, videos)) }
   })
 
   server.get('/api/comments', async (request) => {
@@ -105,7 +126,8 @@ export function buildServer(deps: ServerDeps) {
       .parse(request.query)
     let comments = store.listComments(query.videoId)
     if (query.limit !== undefined) comments = comments.slice(0, query.limit)
-    return { comments }
+    const videos = videoMap(store)
+    return { comments: comments.map((c) => withVideo(c, videos)) }
   })
 
   server.get('/api/opportunities', async (request) => {
