@@ -57,6 +57,13 @@ em { font-style: italic; }
 .brand-link { text-decoration: none; color: inherit; cursor: pointer; border-radius: 0.5rem; }
 .brand-link:hover .logo { background: var(--accent); transition: background 0.18s var(--ease); }
 .brand-link:hover .tagline { color: var(--text-2); }
+.logo-img {
+  width: 2.4rem; height: 2.4rem;
+  border-radius: 0.5rem;
+  object-fit: cover;
+  display: block;
+  box-shadow: 0 1px 3px rgba(26, 20, 16, 0.14);
+}
 .logo {
   width: 2.5rem; height: 2.5rem;
   border-radius: 0.65rem;

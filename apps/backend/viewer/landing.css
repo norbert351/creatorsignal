@@ -55,6 +55,13 @@ em { font-style: italic; }
   font-family: "Clash Display", sans-serif;
   font-weight: 700; font-size: 0.9rem;
 }
+.logo-img {
+  width: 2.4rem; height: 2.4rem;
+  border-radius: 0.6rem;
+  object-fit: cover;
+  display: block;
+  box-shadow: 0 1px 3px rgba(26, 20, 16, 0.14);
+}
 .brand-text { display: flex; flex-direction: column; }
 .brand-name { font-family: "Clash Display", sans-serif; font-weight: 600; font-size: 1.05rem; line-height: 1.15; }
 .brand-tag { color: var(--text-3); font-size: 0.72rem; }
@@ -312,6 +319,7 @@ em { font-style: italic; }
 }
 .foot-brand { display: flex; gap: 0.6rem; align-items: center; font-family: "Clash Display", sans-serif; font-weight: 600; }
 .foot-brand .logo { width: 1.9rem; height: 1.9rem; font-size: 0.75rem; }
+.foot-brand .logo-img { width: 1.9rem; height: 1.9rem; object-fit: cover; border-radius: 0.45rem; }
 .foot p { color: var(--text-3); font-size: 0.78rem; }
 
 /* ------------------------------------------------------------- responsive */
