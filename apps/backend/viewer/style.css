@@ -244,6 +244,23 @@ em { font-style: italic; }
 }
 .pf-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(26, 20, 16, 0.07); border-color: rgba(26, 20, 16, 0.16); }
 
+.soon {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+  border: 1px dashed var(--surface-border);
+  padding: 0.16rem 0.5rem;
+  border-radius: 999px;
+  margin-left: auto;
+  white-space: nowrap;
+}
+.pf-card.soon { opacity: 0.72; }
+.pf-card.soon .pf-input input,
+.pf-card.soon .pf-input button { cursor: not-allowed; opacity: 0.7; }
+.pf-card.soon:not(:hover) { transform: none; }
+
 .pf-head { display: flex; align-items: center; gap: 0.55rem; }
 .pf-icon {
   width: 1.7rem; height: 1.7rem;
