@@ -10,7 +10,8 @@ function apiUrl(path) {
 }
 
 async function api(path, options = {}) {
-  const headers = { 'content-type': 'application/json', ...(options.headers ?? {}) }
+  const headers = { ...(options.headers ?? {}) }
+  if (options.body) headers['content-type'] = 'application/json'
   const token = localStorage.getItem(TOKEN_KEY)
   if (token) headers.authorization = `Bearer ${token}`
   const response = await fetch(apiUrl(path), { ...options, headers })
@@ -249,16 +250,82 @@ function renderOpportunities(opportunities) {
         el('div', 'sub', `asked by: ${o.relatedAuthors.map((a) => a.name).join(', ')}`),
       )
     }
+    const detail = el('div', 'opp-detail')
+    detail.hidden = true
+    const meta = el('div', 'opp-meta')
+    meta.append(
+      el('span', '', `demand ${o.demandScore}`),
+      el('span', '', `${o.repeatCount} repeats`),
+      el('span', '', `${o.videoCount} videos`),
+      el('span', '', o.unanswered ? 'unanswered' : 'answered'),
+      el('span', '', `last seen ${new Date(o.lastSeenAt).toLocaleDateString()}`),
+    )
+    detail.append(meta)
+    detail.append(el('div', 'opp-evidence'))
+    item.append(detail)
+    const actions = el('div', 'actions')
+    const openBtn = el('button', 'ok', 'Open')
+    openBtn.title = 'Show the evidence behind this opportunity'
+    openBtn.onclick = () => toggleOpen(o, detail, openBtn)
+    actions.append(openBtn)
     if (o.status === 'open' || o.status === 'proposed') {
-      const actions = el('div', 'actions')
       const approve = el('button', 'ok', 'Approve → make it')
       approve.onclick = () => decide(o.id, 'approved')
       const reject = el('button', 'no', 'Reject')
       reject.onclick = () => decide(o.id, 'rejected')
       actions.append(approve, reject)
-      item.append(actions)
     }
+    item.append(actions)
     wrap.append(item)
+  }
+}
+
+// Cache evidence per topic so toggling open/close is instant after first load.
+const evidenceCache = new Map()
+
+async function toggleOpen(o, detail, btn) {
+  const opening = detail.hidden
+  detail.hidden = !opening
+  btn.textContent = opening ? 'Close' : 'Open'
+  if (!opening) return
+  const box = detail.querySelector('.opp-evidence')
+  box.innerHTML = '<div class="empty">Loading evidence…</div>'
+  try {
+    let signals
+    if (evidenceCache.has(o.topic)) {
+      signals = evidenceCache.get(o.topic)
+    } else {
+      const res = await api(`/signals?topic=${encodeURIComponent(o.topic)}&limit=100`)
+      signals = res.signals ?? []
+      evidenceCache.set(o.topic, signals)
+    }
+    renderEvidence(box, signals)
+  } catch (error) {
+    box.innerHTML = '<div class="empty">Could not load evidence.</div>'
+    console.error('evidence load failed', error)
+  }
+}
+
+function renderEvidence(box, signals) {
+  if (!signals.length) {
+    box.innerHTML = '<div class="empty">No raw signals for this topic yet.</div>'
+    return
+  }
+  box.innerHTML = ''
+  for (const s of signals) {
+    const ev = el('div', 'ev')
+    const meta = el('div', 'ev-meta')
+    meta.append(platformPill(s.platform), el('span', `pill-sm ${s.kind}`, s.kind), el('span', 'ev-author', s.authorName))
+    ev.append(meta)
+    if (s.videoTitle) {
+      const vlink = el('a', 'vid', `📺 ${s.videoTitle}`)
+      vlink.href = s.videoUrl || '#'
+      vlink.target = '_blank'
+      vlink.rel = 'noopener'
+      ev.append(vlink)
+    }
+    ev.append(el('div', 'ev-text', s.text))
+    box.append(ev)
   }
 }
 
@@ -379,13 +446,17 @@ async function loadBrief() {
 
 async function generateBrief() {
   const btn = document.getElementById('generate-brief')
+  const ack = document.getElementById('brief-ack')
   btn.disabled = true
   btn.textContent = 'Drafting…'
+  if (ack) ack.textContent = ''
   try {
     const res = await api('/brief/generate', { method: 'POST' })
     renderBrief(res.brief)
+    if (ack) ack.textContent = `✓ Brief regenerated ${new Date().toLocaleTimeString()}`
   } catch (error) {
     console.error('brief generate failed', error)
+    if (ack) ack.textContent = '❌ Generate failed — try again'
   } finally {
     btn.disabled = false
     btn.textContent = 'Generate now'

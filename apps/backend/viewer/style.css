@@ -54,6 +54,9 @@ em { font-style: italic; }
 }
 
 .brand { display: flex; gap: 0.8rem; align-items: center; }
+.brand-link { text-decoration: none; color: inherit; cursor: pointer; border-radius: 0.5rem; }
+.brand-link:hover .logo { background: var(--accent); transition: background 0.18s var(--ease); }
+.brand-link:hover .tagline { color: var(--text-2); }
 .logo {
   width: 2.5rem; height: 2.5rem;
   border-radius: 0.65rem;
@@ -392,7 +395,7 @@ em { font-style: italic; }
 .dot.x { background: var(--x); }
 .dot.telegram { background: var(--tg); }
 
-.actions { display: flex; gap: 0.5rem; margin-top: 0.65rem; }
+.actions { display: flex; gap: 0.5rem; margin-top: 0.65rem; align-items: center; }
 .actions button {
   font-family: "General Sans", sans-serif;
   font-size: 0.75rem;
@@ -408,6 +411,36 @@ em { font-style: italic; }
 .actions button:hover { border-color: var(--accent); }
 .actions button.ok:hover { color: var(--good); border-color: var(--good); background: rgba(46, 125, 79, 0.06); }
 .actions button.no:hover { color: var(--bad); border-color: var(--bad); background: rgba(198, 40, 40, 0.06); }
+
+.ack { color: var(--good); font-size: 0.8rem; margin-right: auto; font-weight: 500; }
+
+.opp-detail {
+  margin-top: 0.7rem;
+  padding-top: 0.7rem;
+  border-top: 1px dashed rgba(26, 20, 16, 0.16);
+}
+.opp-meta {
+  display: flex;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.68rem;
+  color: var(--text-3);
+  letter-spacing: 0.02em;
+}
+.opp-evidence { display: flex; flex-direction: column; gap: 0.55rem; margin-top: 0.7rem; }
+.ev {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--surface);
+  border: 1px solid var(--surface-border);
+  border-radius: 0.55rem;
+}
+.ev-meta { display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; }
+.ev-author { color: var(--text-2); font-size: 0.78rem; font-weight: 500; }
+.ev-text { font-size: 0.87rem; color: var(--text-1); }
 
 .filters { display: flex; gap: 0.5rem; margin-bottom: 0.85rem; flex-wrap: wrap; }
 .chip {

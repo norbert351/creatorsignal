@@ -108,10 +108,12 @@ export function buildServer(deps: ServerDeps) {
     const query = z
       .object({
         kind: z.enum(['question', 'request', 'topic', 'praise', 'critique']).optional(),
+        topic: z.string().max(500).optional(),
         limit: z.coerce.number().int().positive().max(500).optional(),
       })
       .parse(request.query)
     let signals = store.listSignals(query.kind)
+    if (query.topic !== undefined) signals = signals.filter((s) => s.topic === query.topic)
     if (query.limit !== undefined) signals = signals.slice(-query.limit)
     const videos = videoMap(store)
     return { signals: signals.map((s) => withVideo(s, videos)) }

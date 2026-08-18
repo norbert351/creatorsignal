@@ -13,19 +13,19 @@
 </head>
 <body>
 
-<header class="topbar">
-  <div class="brand">
+<div class="topbar">
+  <a class="brand brand-link" href="/" aria-label="CreatorSignal — back to landing page">
     <span class="logo">CS</span>
     <div class="brand-text">
       <h1>CreatorSignal</h1>
       <p class="tagline">a persistent Mind for creators</p>
     </div>
-  </div>
+  </a>
   <div class="status">
     <span id="mind-mode" class="pill">mind: —</span>
     <button id="run-pipeline" class="btn btn-primary">Run pipeline</button>
   </div>
-</header>
+</div>
 
 <section class="hero">
   <div class="hero-inner">
@@ -148,6 +148,7 @@
     <p class="hint">The Mind drafts what to make next, with evidence, every week. Pushed to your Telegram group when connected.</p>
     <div id="brief" class="list"></div>
     <div class="actions" style="margin-top: 0.6rem">
+      <span id="brief-ack" class="ack"></span>
       <button id="generate-brief" class="btn btn-secondary btn-mini">Generate now</button>
     </div>
   </div>
