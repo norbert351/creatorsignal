@@ -18,6 +18,9 @@ services:
         value: '22'
       - key: CREATORSIGNAL_PORT
         value: '10000'
+      - key: CREATORSIGNAL_AUTH
+        # 'on' shows the viewer login gate (accounts). 'off' = open workspace.
+        value: 'on'
       - key: CREATORSIGNAL_MIND_MODE
         value: simulated
       - key: CREATORSIGNAL_INGEST_INTERVAL_MIN

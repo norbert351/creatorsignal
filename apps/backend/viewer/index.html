@@ -22,8 +22,44 @@
     </div>
   </a>
   <div class="status">
+    <span id="auth-name" class="pill" hidden></span>
+    <button id="logout" class="btn btn-mini" hidden>Log out</button>
     <span id="mind-mode" class="pill">mind: —</span>
     <button id="run-pipeline" class="btn btn-primary">Run pipeline</button>
+  </div>
+</div>
+
+<div id="auth-overlay" class="auth-overlay" hidden>
+  <div class="auth-box">
+    <div class="auth-brand">
+      <img class="logo-img" src="/viewer/images/logo.jpg" alt="CreatorSignal" />
+      <h1>CreatorSignal</h1>
+    </div>
+    <p class="hint">Sign in to open your audience dashboard. Your audience is telling you what to make next.</p>
+    <div class="auth-tabs">
+      <button id="tab-login" class="chip active">Log in</button>
+      <button id="tab-register" class="chip">Create account</button>
+    </div>
+    <form id="auth-form">
+      <div class="field" id="reg-name-wrap" hidden>
+        <label for="auth-name-in">Name</label>
+        <input id="auth-name-in" type="text" placeholder="Your name" autocomplete="off" />
+      </div>
+      <div class="field" id="reg-handle-wrap" hidden>
+        <label for="auth-handle">Handle</label>
+        <input id="auth-handle" type="text" placeholder="@you" autocomplete="off" />
+      </div>
+      <div class="field">
+        <label for="auth-email">Email</label>
+        <input id="auth-email" type="email" placeholder="you@example.com" autocomplete="email" />
+      </div>
+      <div class="field">
+        <label for="auth-pass">Password</label>
+        <input id="auth-pass" type="password" placeholder="at least 8 characters" autocomplete="current-password" />
+      </div>
+      <div class="auth-err" id="auth-err"></div>
+      <button type="submit" class="btn btn-primary" id="auth-submit">Log in</button>
+    </form>
   </div>
 </div>
 
@@ -117,6 +153,21 @@
       </div>
       <div class="tg-status" id="tg-status"></div>
     </div>
+
+    <div class="pf-card" data-platform="webhook">
+      <div class="pf-head">
+        <span class="pf-icon wb">⇄</span>
+        <span class="pf-name">Email / webhook digest</span>
+      </div>
+      <p class="pf-desc">Mind POSTs digests &amp; briefs to your webhook — point it at Zapier/Make for email, Slack, or any endpoint</p>
+      <div class="pf-input">
+        <input type="text" id="wh-url" placeholder="https://hooks.example.com/..." autocomplete="off" />
+      </div>
+      <div class="pf-input">
+        <button class="btn btn-mini" id="wh-connect">Connect</button>
+      </div>
+      <div class="tg-status" id="wh-status"></div>
+    </div>
   </div>
 </section>
 
@@ -127,10 +178,16 @@
     <div id="opportunities" class="list"></div>
   </div>
 
-  <div class="card">
+  <div class="card wide">
     <h3>⭐ Relationship memory</h3>
     <p class="hint">Your superfans, ranked by engagement and question count.</p>
     <div id="fans" class="list"></div>
+  </div>
+
+  <div class="card wide">
+    <h3>✍️ Reply drafts</h3>
+    <p class="hint">Ready-to-send replies the Mind drafted for the fans asking. Draft one from a fan or an opportunity, then copy to send.</p>
+    <div id="drafts" class="list"></div>
   </div>
 
   <div class="card wide">

@@ -31,8 +31,12 @@ export const configSchema = z.object({
   minDemandScore: z.coerce.number().int().nonnegative().default(25),
   superfanThreshold: z.coerce.number().int().nonnegative().default(30),
   ingestDaysBack: z.coerce.number().int().positive().default(30),
-  /** When set, /api/* requires `authorization: Bearer <token>`. */
+  /** When set, /api/* requires `authorization: Bearer *** */
   apiToken: z.string().min(8).optional(),
+  /** Viewer login gate. 'on' (default) shares the API behind account auth.
+   *  'off' restores the open single-workspace behaviour.
+   *  Env: CREATORSIGNAL_AUTH */
+  auth: z.enum(['on', 'off']).default('on'),
 })
 export type Config = z.infer<typeof configSchema>
 

@@ -3,6 +3,7 @@ import type { Comment, Digest, Signal } from '@creatorsignal/shared'
 import type { MindGateway } from '@creatorsignal/mind-client'
 import type { Store } from './db.js'
 import type { TelegramNotifier } from './telegram-notify.js'
+import type { WebhookNotifier } from './webhook-notify.js'
 
 export type Stage = 'ingest' | 'distill' | 'relay'
 
@@ -17,6 +18,8 @@ export interface PipelineDeps {
   superfanThreshold: number
   /** Optional push channel: notifies the creator's Telegram group. */
   notify?: TelegramNotifier
+  /** Optional alternate channel: POSTs new opportunities to a webhook. */
+  webhookNotify?: WebhookNotifier
 }
 
 export interface PipelineSummary {
@@ -88,10 +91,12 @@ export async function runPipeline(deps: PipelineDeps, stages: Stage[]): Promise<
       store.insertDigest(digest)
       summary.digestItems = result.digestItems.length
     }
-    // Push new opportunity cards to the creator's Telegram group (if configured).
-    // Fire-and-forget: a slow Telegram call must never block the pipeline.
+    // Push new opportunity cards to the creator's Telegram group + webhook
+    // (if configured). Fire-and-forget: a slow call must never block the
+    // pipeline.
     for (const opportunity of created) {
       void deps.notify?.opportunityCreated(opportunity)
+      void deps.webhookNotify?.opportunityCreated(opportunity)
     }
   }
 

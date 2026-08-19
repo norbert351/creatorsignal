@@ -16,14 +16,7 @@ async function api(path, options = {}) {
   if (token) headers.authorization = `Bearer ${token}`
   const response = await fetch(apiUrl(path), { ...options, headers })
   if (!response.ok) {
-    if (response.status === 401 && !token) {
-      // Prompt once for the API token, then retry.
-      const entered = prompt('Enter the CreatorSignal API token (see CREATORSIGNAL_API_TOKEN):')
-      if (entered) {
-        localStorage.setItem(TOKEN_KEY, entered)
-        return api(path, options)
-      }
-    }
+    if (response.status === 401) showAuth()
     throw new Error(`API ${path}: ${response.status}`)
   }
   return response.json()
@@ -136,6 +129,180 @@ function bindOnboarding() {
   }
 
   bindTelegramBot()
+  bindWebhook()
+}
+
+// ---------------------------------------------------------------- login gate
+
+function setAuthMode(mode) {
+  const register = mode === 'register'
+  document.getElementById('reg-name-wrap').hidden = !register
+  document.getElementById('reg-handle-wrap').hidden = !register
+  document.getElementById('auth-submit').textContent = register ? 'Create account' : 'Log in'
+  document.getElementById('tab-login').classList.toggle('active', !register)
+  document.getElementById('tab-register').classList.toggle('active', register)
+}
+
+function showAuth() {
+  const overlay = document.getElementById('auth-overlay')
+  if (overlay) overlay.hidden = false
+  const logout = document.getElementById('logout')
+  const name = document.getElementById('auth-name')
+  if (logout) logout.hidden = true
+  if (name) name.hidden = true
+  setAuthMode('login')
+}
+
+function bindAuth() {
+  document.getElementById('tab-login').onclick = () => setAuthMode('login')
+  document.getElementById('tab-register').onclick = () => setAuthMode('register')
+  document.getElementById('auth-form').addEventListener('submit', async (e) => {
+    e.preventDefault()
+    const registerMode = !document.getElementById('reg-name-wrap').hidden
+    const email = document.getElementById('auth-email').value.trim()
+    const password = document.getElementById('auth-pass').value
+    const err = document.getElementById('auth-err')
+    const submit = document.getElementById('auth-submit')
+    err.textContent = ''
+    submit.disabled = true
+    try {
+      let response
+      if (registerMode) {
+        const name = document.getElementById('auth-name-in').value.trim()
+        const handle = document.getElementById('auth-handle').value.trim()
+        response = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ email, password, name, handle }),
+        })
+      } else {
+        response = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        })
+      }
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        err.textContent = registerMode
+          ? 'Could not create account — try a different email.'
+          : 'Invalid email or password.'
+        return
+      }
+      localStorage.setItem(TOKEN_KEY, data.token)
+      document.getElementById('auth-name').textContent = `👤 ${data.user.name}`
+      document.getElementById('auth-name').hidden = false
+      document.getElementById('logout').hidden = false
+      document.getElementById('auth-overlay').hidden = true
+      await boot()
+    } catch (error) {
+      err.textContent = 'Network error — try again.'
+    } finally {
+      submit.disabled = false
+    }
+  })
+  document.getElementById('logout').onclick = async () => {
+    const token = localStorage.getItem(TOKEN_KEY)
+    if (token) {
+      try {
+        await fetch('/api/auth/logout', { method: 'POST', headers: { authorization: `Bearer ${token}` } })
+      } catch (error) {
+        console.error('logout failed', error)
+      }
+    }
+    localStorage.removeItem(TOKEN_KEY)
+    showAuth()
+    window.location.reload()
+  }
+}
+
+async function initAuth() {
+  let health
+  try {
+    health = await fetch('/health').then((r) => r.json())
+  } catch {
+    health = null
+  }
+  if (!health || health.auth !== true) {
+    // Auth off (or /health unreachable) — open dashboard.
+    await boot()
+    return
+  }
+  const token = localStorage.getItem(TOKEN_KEY)
+  if (token) {
+    try {
+      const res = await fetch('/api/auth/me', { headers: { authorization: `Bearer ${token}` } })
+      if (res.ok) {
+        const me = await res.json()
+        document.getElementById('auth-name').textContent = `👤 ${me.user.name}`
+        document.getElementById('auth-name').hidden = false
+        document.getElementById('logout').hidden = false
+        document.getElementById('auth-overlay').hidden = true
+        await boot()
+        return
+      }
+    } catch (error) {
+      console.error('auth check failed', error)
+    }
+    localStorage.removeItem(TOKEN_KEY)
+  }
+  showAuth()
+}
+
+// ------------------------------------------------------------- webhook digest
+
+function renderWebhookStatus(status) {
+  const box = document.getElementById('wh-status')
+  if (!box) return
+  if (!status.enabled) {
+    box.innerHTML = ''
+    box.classList.remove('on')
+    return
+  }
+  const disconnect = document.createElement('button')
+  disconnect.className = 'linklike'
+  disconnect.textContent = 'Disconnect'
+  disconnect.onclick = async () => {
+    try {
+      const res = await api('/settings/webhook', { method: 'DELETE' })
+      renderWebhookStatus(res)
+    } catch (error) {
+      console.error('webhook disconnect failed', error)
+    }
+  }
+  box.classList.add('on')
+  box.textContent = `✅ Connected · ${status.urlMasked} · `
+  box.append(disconnect)
+}
+
+function bindWebhook() {
+  const connect = document.getElementById('wh-connect')
+  if (!connect) return
+  connect.onclick = async () => {
+    const url = document.getElementById('wh-url').value.trim()
+    if (!url) return
+    connect.disabled = true
+    const status = document.getElementById('wh-status')
+    status.textContent = 'Connecting…'
+    try {
+      const res = await api('/settings/webhook', { method: 'POST', body: JSON.stringify({ url }) })
+      document.getElementById('wh-url').value = ''
+      renderWebhookStatus(res)
+    } catch (error) {
+      status.textContent = '❌ could not connect'
+    } finally {
+      connect.disabled = false
+    }
+  }
+}
+
+async function loadWebhookStatus() {
+  try {
+    const res = await api('/settings/webhook')
+    renderWebhookStatus(res)
+  } catch (error) {
+    console.error('webhook status load failed', error)
+  }
 }
 
 function renderTelegramStatus(status) {
@@ -268,6 +435,20 @@ function renderOpportunities(opportunities) {
     openBtn.title = 'Show the evidence behind this opportunity'
     openBtn.onclick = () => toggleOpen(o, detail, openBtn)
     actions.append(openBtn)
+    const draftBtn = el('button', '', '💬 draft reply')
+    draftBtn.title = 'Draft a reply to the fan asking for this'
+    draftBtn.onclick = async () => {
+      try {
+        const res = await api('/reply-draft', { method: 'POST', body: JSON.stringify({ opportunityId: o.id }) })
+        draftBtn.textContent = '✓ drafted'
+        void loadDrafts()
+        const show = el('div', 'text', `📝 ${res.draft}`)
+        item.append(show)
+      } catch (error) {
+        console.error('draft reply failed', error)
+      }
+    }
+    actions.append(draftBtn)
     if (o.status === 'open' || o.status === 'proposed') {
       const approve = el('button', 'ok', 'Approve → make it')
       approve.onclick = () => decide(o.id, 'approved')
@@ -359,6 +540,7 @@ function renderFans(fans) {
       const draftEl = el('div', 'text', `📝 ${res.draft}`)
       item.append(draftEl)
       draftBtn.remove()
+      void loadDrafts()
     }
     const actions = el('div', 'actions')
     actions.append(draftBtn)
@@ -465,20 +647,68 @@ async function generateBrief() {
 
 // ------------------------------------------------------------------- data
 
+function renderDrafts(drafts) {
+  const wrap = document.getElementById('drafts')
+  wrap.innerHTML = ''
+  if (!drafts.length) {
+    wrap.append(el('div', 'empty', 'No drafts yet — hit "draft a reply" on a fan or an opportunity.'))
+    return
+  }
+  for (const d of drafts) {
+    const item = el('div', 'item')
+    const ctx = d.opportunity ? `🎯 ${d.opportunity.topicLabel}` : d.fan ? `⭐ ${d.fan.name}` : 'reply draft'
+    item.append(el('div', 'sub', ctx))
+    item.append(el('div', 'text', d.content))
+    const copy = document.createElement('button')
+    copy.className = 'linklike'
+    copy.textContent = 'Copy'
+    copy.onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(d.content)
+        copy.textContent = 'Copied ✓'
+      } catch {
+        const ta = document.createElement('textarea')
+        ta.value = d.content
+        document.body.appendChild(ta)
+        ta.select()
+        document.execCommand('copy')
+        ta.remove()
+        copy.textContent = 'Copied ✓'
+      }
+      setTimeout(() => (copy.textContent = 'Copy'), 1400)
+    }
+    const actions = el('div', 'actions')
+    actions.append(copy)
+    item.append(actions)
+    wrap.append(item)
+  }
+}
+
+async function loadDrafts() {
+  try {
+    const res = await api('/drafts')
+    renderDrafts(res.drafts)
+  } catch (error) {
+    console.error('drafts load failed', error)
+  }
+}
+
 async function refresh() {
   // /health is intentionally public (auth-exempt) and lives outside /api.
   const health = await fetch('/health').then((r) => r.json())
-  const [opportunities, fans, comments, digests] = await Promise.all([
+  const [opportunities, fans, comments, digests, drafts] = await Promise.all([
     api('/opportunities'),
     api('/fans'),
     api('/comments?limit=200'),
     api('/digests?limit=5'),
+    api('/drafts'),
   ])
   renderStats(health.stats)
   renderOpportunities(opportunities.opportunities)
   renderFans(fans.fans)
   renderComments(comments.comments)
   renderDigests(digests.digests)
+  renderDrafts(drafts.drafts)
   document.getElementById('mind-mode').textContent = `mind: ${health.mindMode}`
 }
 
@@ -495,7 +725,7 @@ async function runPipeline() {
   }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+async function boot() {
   bindOnboarding()
   document.getElementById('run-pipeline').onclick = runPipeline
   document.getElementById('generate-brief').onclick = generateBrief
@@ -508,6 +738,12 @@ document.addEventListener('DOMContentLoaded', () => {
   })
   void loadOnboarding()
   void loadTelegramStatus()
+  void loadWebhookStatus()
   void loadBrief()
   void refresh()
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  bindAuth()
+  void initAuth()
 })

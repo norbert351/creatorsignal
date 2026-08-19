@@ -6,6 +6,7 @@ import type { Store } from './db.js'
 import type { PipelineDeps, PipelineSummary } from './pipeline.js'
 import { runPipeline } from './pipeline.js'
 import type { TelegramNotifier } from './telegram-notify.js'
+import type { WebhookNotifier } from './webhook-notify.js'
 
 export interface WorkerOptions {
   store: Store
@@ -19,6 +20,8 @@ export interface WorkerOptions {
   briefTime?: string
   /** Optional push channel: notifies the creator's Telegram group. */
   notify?: TelegramNotifier
+  /** Optional alternate channel: POSTs digest/brief to a configured webhook. */
+  webhookNotify?: WebhookNotifier
   log?: (message: string) => void
 }
 
@@ -60,6 +63,7 @@ export function startWorkers(options: WorkerOptions): WorkerHandle {
     briefDay,
     briefTime,
     notify,
+    webhookNotify,
   } = options
   const log = options.log ?? ((message: string) => console.log(`[workers] ${message}`))
   let running = false
@@ -110,6 +114,7 @@ export function startWorkers(options: WorkerOptions): WorkerHandle {
       store.insertDigest(digest)
       log(`digest: stored ${items.length} items`)
       void options.notify?.digest(digest)
+      void options.webhookNotify?.digest(digest)
     })
 
   const briefLoop = () =>
@@ -126,6 +131,7 @@ export function startWorkers(options: WorkerOptions): WorkerHandle {
         `brief: ${brief.items.length} items — ${brief.items.map((i) => i.topicLabel).join(', ') || 'nothing open'}`,
       )
       void notify?.brief(brief)
+      void webhookNotify?.brief(brief)
     })
 
   const ingestTimer = setInterval(ingestLoop, ingestIntervalMin * 60_000)

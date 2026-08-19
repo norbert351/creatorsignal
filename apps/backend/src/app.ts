@@ -11,6 +11,7 @@ import { XIngestor } from './ingest/x.js'
 import { YoutubeIngestor } from './ingest/youtube.js'
 import type { PipelineDeps } from './pipeline.js'
 import { TelegramNotifier } from './telegram-notify.js'
+import { WebhookNotifier } from './webhook-notify.js'
 import { startWorkers } from './workers.js'
 
 export interface App {
@@ -18,6 +19,7 @@ export interface App {
   gateway: MindGateway
   pipelineDeps: PipelineDeps
   notify: TelegramNotifier
+  webhookNotify: WebhookNotifier
   start: () => Promise<void>
   stop: () => Promise<void>
 }
@@ -115,9 +117,14 @@ export function createApp(config: Config, mindModeOverride?: 'simulated' | 'tele
     fallbackBotToken: config.telegramBotToken,
     log: (level, message) => console.log(`[telegram] ${level}: ${message}`),
   })
+  const webhookNotify = new WebhookNotifier({
+    store,
+    log: (level, message) => console.log(`[webhook] ${level}: ${message}`),
+  })
   pipelineDeps.notify = notify
+  pipelineDeps.webhookNotify = webhookNotify
 
-  const server = buildServer({ store, gateway, pipelineDeps, config, notify })
+  const server = buildServer({ store, gateway, pipelineDeps, config, notify, webhookNotify })
   const workers = startWorkers({
     store,
     gateway,
@@ -127,6 +134,7 @@ export function createApp(config: Config, mindModeOverride?: 'simulated' | 'tele
     briefDay: config.briefDay,
     briefTime: config.briefTime,
     notify,
+    webhookNotify,
   })
 
   return {
@@ -134,6 +142,7 @@ export function createApp(config: Config, mindModeOverride?: 'simulated' | 'tele
     gateway,
     pipelineDeps,
     notify,
+    webhookNotify,
     start: async () => {
       await gateway.start?.()
       await server.listen({ port: config.port, host: '0.0.0.0' })

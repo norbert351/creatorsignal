@@ -105,6 +105,14 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS accounts (
+  user_id TEXT PRIMARY KEY,
+  email TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  api_key TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS targets (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
@@ -570,6 +578,80 @@ export class Store {
       handle: String(r.handle),
       createdAt: String(r.created_at),
     }))
+  }
+
+  // -------------------------------------------------------------------------
+  // Accounts (viewer login gate auth)
+  // -------------------------------------------------------------------------
+
+  /** Returns false when the email is already taken. */
+  createAccount(a: {
+    userId: string
+    email: string
+    passwordHash: string
+    apiKey: string
+    createdAt: string
+  }): boolean {
+    try {
+      const result = this.db
+        .prepare(
+          `INSERT INTO accounts (user_id, email, password_hash, api_key, created_at)
+           VALUES (?, ?, ?, ?, ?)`,
+        )
+        .run(a.userId, a.email, a.passwordHash, a.apiKey, a.createdAt)
+      return Number(result.changes) > 0
+    } catch (error) {
+      // UNIQUE email violation surfaces as a throw from sqlite.
+      if (String(error).includes('UNIQUE')) return false
+      throw error
+    }
+  }
+
+  getAccountByEmail(email: string): {
+    userId: string
+    email: string
+    passwordHash: string
+    apiKey: string
+    createdAt: string
+  } | null {
+    const row = this.db.prepare('SELECT * FROM accounts WHERE email = ?').get(email) as RawRow | undefined
+    if (!row) return null
+    return this.rowToAccount(row)
+  }
+
+  getAccountByApiKey(apiKey: string): {
+    userId: string
+    email: string
+    apiKey: string
+    createdAt: string
+  } | null {
+    const row = this.db.prepare('SELECT * FROM accounts WHERE api_key = ?').get(apiKey) as RawRow | undefined
+    if (!row) return null
+    return this.rowToAccount(row)
+  }
+
+  setAccountKey(userId: string, apiKey: string): void {
+    this.db.prepare('UPDATE accounts SET api_key = ? WHERE user_id = ?').run(apiKey, userId)
+  }
+
+  deleteAccount(userId: string): void {
+    this.db.prepare('DELETE FROM accounts WHERE user_id = ?').run(userId)
+  }
+
+  private rowToAccount(r: RawRow): {
+    userId: string
+    email: string
+    passwordHash: string
+    apiKey: string
+    createdAt: string
+  } {
+    return {
+      userId: String(r.user_id),
+      email: String(r.email),
+      passwordHash: String(r.password_hash),
+      apiKey: String(r.api_key),
+      createdAt: String(r.created_at),
+    }
   }
 
   addTarget(target: {
