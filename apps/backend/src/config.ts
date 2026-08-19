@@ -37,6 +37,11 @@ export const configSchema = z.object({
    *  'off' restores the open single-workspace behaviour.
    *  Env: CREATORSIGNAL_AUTH */
   auth: z.enum(['on', 'off']).default('on'),
+  /** Google OAuth (social login). When both are set, the viewer shows a
+   *  "Continue with Google" button. Env: CREATORSIGNAL_GOOGLE_CLIENT_ID/
+   *  CREATORSIGNAL_GOOGLE_CLIENT_SECRET. */
+  googleClientId: z.string().optional(),
+  googleClientSecret: z.string().optional(),
 })
 export type Config = z.infer<typeof configSchema>
 

@@ -63,10 +63,11 @@ export class YoutubeIngestor {
   }
 
   /** Pulls new comments for all known videos and stores them. */
-  async ingestNew(store: Store): Promise<Comment[]> {
+  async ingestNew(store: Store, userId = 'local'): Promise<Comment[]> {
     // Merge per-creator targets stored via the onboarding API (added live,
-    // no restart needed). Channel targets expand to the uploads playlist.
-    const dbTargets = store.listTargets().filter((t) => t.platform === 'youtube')
+    // no restart needed), scoped to the owning user's workspace. Channel
+    // targets expand to the uploads playlist.
+    const dbTargets = store.listTargets(userId).filter((t) => t.platform === 'youtube')
     const extra = {
       channelId: dbTargets.find((t) => t.kind === 'channel')?.value,
       videoIds: dbTargets.filter((t) => t.kind === 'video').map((t) => t.value),
@@ -76,7 +77,7 @@ export class YoutubeIngestor {
     const inserted: Comment[] = []
     for (const videoId of videos) {
       try {
-        inserted.push(...(await this.ingestVideo(store, videoId)))
+        inserted.push(...(await this.ingestVideo(store, videoId, userId)))
       } catch (error) {
         // A single video (e.g. comments disabled) must never kill the run.
         const message = error instanceof Error ? error.message : String(error)
@@ -115,9 +116,9 @@ export class YoutubeIngestor {
     }
   }
 
-  private async ingestVideo(store: Store, videoId: string): Promise<Comment[]> {
+  private async ingestVideo(store: Store, videoId: string, userId = 'local'): Promise<Comment[]> {
     const cursorKey = `cursor:${videoId}`
-    const cursor = store.getChannelState(cursorKey)
+    const cursor = store.getChannelState(cursorKey, userId)
     const publishedAfter =
       cursor ?? new Date(Date.now() - this.daysBack * 86_400_000).toISOString()
     const inserted: Comment[] = []
@@ -147,7 +148,7 @@ export class YoutubeIngestor {
           publishedAt: snippet.publishedAt,
           ingestedAt: new Date().toISOString(),
         }
-        if (store.insertComment(comment)) inserted.push(comment)
+        if (store.insertComment(comment, userId)) inserted.push(comment)
       }
       pageToken = data?.nextPageToken as string | undefined
       if (!pageToken) break
@@ -158,7 +159,7 @@ export class YoutubeIngestor {
         .map((c) => c.publishedAt)
         .sort()
         .at(-1)
-      if (newest) store.setChannelState(cursorKey, newest)
+      if (newest) store.setChannelState(cursorKey, newest, userId)
     }
     return inserted
   }

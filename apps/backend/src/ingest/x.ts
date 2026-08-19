@@ -30,9 +30,10 @@ export class XIngestor {
   ) {}
 
   /** Pulls new tweets for all configured targets and stores them. */
-  async ingestNew(store: Store): Promise<Comment[]> {
-    // Merge per-creator targets stored via the onboarding API (live, no restart).
-    const dbTargets = store.listTargets().filter((t) => t.platform === 'x')
+  async ingestNew(store: Store, userId = 'local'): Promise<Comment[]> {
+    // Merge per-creator targets stored via the onboarding API (live, no restart),
+    // scoped to the owning user's workspace.
+    const dbTargets = store.listTargets(userId).filter((t) => t.platform === 'x')
     const userIds = [...this.userIds, ...dbTargets.filter((t) => t.kind === 'user').map((t) => t.value)]
     const query = dbTargets.find((t) => t.kind === 'query')?.value ?? this.query
     const inserted: Comment[] = []
@@ -40,7 +41,7 @@ export class XIngestor {
     if (query) targets.push({ kind: 'query', value: query })
     for (const userId of userIds) targets.push({ kind: 'user', value: userId })
     for (const target of targets) {
-      inserted.push(...(await this.ingestTarget(store, target)))
+      inserted.push(...(await this.ingestTarget(store, target, userId)))
     }
     return inserted
   }
@@ -48,9 +49,10 @@ export class XIngestor {
   private async ingestTarget(
     store: Store,
     target: { kind: 'user' | 'query'; value: string },
+    userId = 'local',
   ): Promise<Comment[]> {
     const cursorKey = `cursor:x:${target.kind}:${target.value}`
-    const cursor = store.getChannelState(cursorKey)
+    const cursor = store.getChannelState(cursorKey, userId)
     const sinceTime = cursor ?? new Date(Date.now() - this.daysBack * 86_400_000).toISOString()
     const inserted: Comment[] = []
     let nextToken: string | undefined
@@ -92,7 +94,7 @@ export class XIngestor {
           publishedAt: item.created_at ?? new Date().toISOString(),
           ingestedAt: new Date().toISOString(),
         }
-        if (store.insertComment(comment)) inserted.push(comment)
+        if (store.insertComment(comment, userId)) inserted.push(comment)
       }
       nextToken = data?.meta?.next_token
       if (!nextToken) break
@@ -103,7 +105,7 @@ export class XIngestor {
         .map((c) => c.publishedAt)
         .sort()
         .at(-1)
-      if (newest) store.setChannelState(cursorKey, newest)
+      if (newest) store.setChannelState(cursorKey, newest, userId)
     }
     return inserted
   }

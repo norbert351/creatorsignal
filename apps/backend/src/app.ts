@@ -92,11 +92,11 @@ export function createApp(config: Config, mindModeOverride?: 'simulated' | 'tele
     : null
 
   const pipelineDeps: PipelineDeps = {
-    ingest: async () => {
+    ingest: async (userId?: string) => {
       const results = await Promise.allSettled([
-        youtube ? youtube.ingestNew(store) : Promise.resolve([]),
-        tiktok ? tiktok.ingestNew(store) : Promise.resolve([]),
-        x ? x.ingestNew(store) : Promise.resolve([]),
+        youtube ? youtube.ingestNew(store, userId) : Promise.resolve([]),
+        tiktok ? tiktok.ingestNew(store, userId) : Promise.resolve([]),
+        x ? x.ingestNew(store, userId) : Promise.resolve([]),
       ])
       const comments: Comment[] = []
       for (const result of results) {

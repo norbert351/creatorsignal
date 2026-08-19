@@ -48,15 +48,15 @@ function angleFor(topicLabel: string, unanswered: boolean): string {
  * Rule-based brief. Deterministic and LLM-free so it always works on the
  * demo deploy (no key needed). Sorted by demand, covered topics excluded.
  */
-export function composeContentBrief(store: Store, maxItems = 3): ContentBrief {
+export function composeContentBrief(store: Store, maxItems = 3, userId = 'local'): ContentBrief {
   const opportunities = store
-    .listOpportunities()
+    .listOpportunities(undefined, userId)
     .filter((o) => o.status === 'open' || o.status === 'proposed')
-    .filter((o) => !store.coveredTopics().has(o.topic))
+    .filter((o) => !store.coveredTopics(userId).has(o.topic))
     .sort((a, b) => b.demandScore - a.demandScore)
     .slice(0, maxItems)
 
-  const fans = store.listFans(0)
+  const fans = store.listFans(0, userId)
   const byId = new Map(fans.map((f) => [f.authorId, f]))
 
   const items: ContentBriefItem[] = opportunities.map((o) => ({

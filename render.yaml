@@ -62,3 +62,9 @@ services:
         sync: false
       - key: CREATORSIGNAL_API_TOKEN
         sync: false
+      # Google OAuth (viewer "Continue with Google"). Optional — when both are
+      # set the login screen shows the social button; otherwise email/password.
+      - key: CREATORSIGNAL_GOOGLE_CLIENT_ID
+        sync: false
+      - key: CREATORSIGNAL_GOOGLE_CLIENT_SECRET
+        sync: false

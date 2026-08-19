@@ -8,8 +8,8 @@ import type { WebhookNotifier } from './webhook-notify.js'
 export type Stage = 'ingest' | 'distill' | 'relay'
 
 export interface PipelineDeps {
-  /** Pulls new comments from the source. Returns what was newly stored. */
-  ingest: () => Promise<Comment[]>
+  /** Pulls new comments from the source for a user's workspace. Returns what was newly stored. */
+  ingest: (userId?: string) => Promise<Comment[]>
   /** Turns raw comments into signals. */
   distill: (comments: Comment[]) => Promise<Signal[]>
   gateway: MindGateway
@@ -37,7 +37,11 @@ export interface PipelineSummary {
  * The main loop: Listen -> Remember -> Understand -> Detect -> Recommend.
  * Stage by stage so the demo can replay any part of the pipeline.
  */
-export async function runPipeline(deps: PipelineDeps, stages: Stage[]): Promise<PipelineSummary> {
+export async function runPipeline(
+  deps: PipelineDeps,
+  stages: Stage[],
+  userId = 'local',
+): Promise<PipelineSummary> {
   const summary: PipelineSummary = {
     stages,
     ingested: 0,
@@ -51,24 +55,24 @@ export async function runPipeline(deps: PipelineDeps, stages: Stage[]): Promise<
   const { store, gateway } = deps
 
   if (stages.includes('ingest')) {
-    const comments = await deps.ingest()
+    const comments = await deps.ingest(userId)
     summary.ingested = comments.length
   }
 
   if (stages.includes('distill')) {
-    const pending = store.listUnsignaledComments(1000)
+    const pending = store.listUnsignaledComments(1000, userId)
     if (pending.length > 0) {
       const signals = await deps.distill(pending)
-      summary.distilled = store.insertSignals(signals)
+      summary.distilled = store.insertSignals(signals, userId)
     }
   }
 
   if (stages.includes('relay')) {
-    const signals = store.listSignals()
+    const signals = store.listSignals(undefined, userId)
     const ctx = {
-      opportunities: store.listOpportunities(),
-      fans: store.listFans(0),
-      coveredTopics: store.coveredTopics(),
+      opportunities: store.listOpportunities(undefined, userId),
+      fans: store.listFans(0, userId),
+      coveredTopics: store.coveredTopics(userId),
       minDemandScore: deps.minDemandScore,
       superfanThreshold: deps.superfanThreshold,
     }
@@ -78,9 +82,9 @@ export async function runPipeline(deps: PipelineDeps, stages: Stage[]): Promise<
       (o) => ctx.opportunities.findIndex((p) => p.topic === o.topic) === -1,
     )
     summary.opportunitiesCreated = created.length
-    for (const opportunity of result.opportunities) store.upsertOpportunity(opportunity)
+    for (const opportunity of result.opportunities) store.upsertOpportunity(opportunity, userId)
     summary.opportunitiesUpdated = result.opportunities.length - summary.opportunitiesCreated
-    for (const fan of result.fans) store.upsertFan(fan)
+    for (const fan of result.fans) store.upsertFan(fan, userId)
     summary.fans = result.fans.length
     if (result.digestItems.length > 0) {
       const digest: Digest = {
@@ -88,7 +92,7 @@ export async function runPipeline(deps: PipelineDeps, stages: Stage[]): Promise<
         createdAt: new Date().toISOString(),
         items: result.digestItems,
       }
-      store.insertDigest(digest)
+      store.insertDigest(digest, userId)
       summary.digestItems = result.digestItems.length
     }
     // Push new opportunity cards to the creator's Telegram group + webhook

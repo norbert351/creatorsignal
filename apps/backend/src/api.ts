@@ -11,6 +11,7 @@ import { draftReply } from '@creatorsignal/mind-client'
 import type { MindGateway } from '@creatorsignal/mind-client'
 import { hashPassword, isEmail, newApiKey, verifyPassword } from './auth.js'
 import type { Account } from './auth.js'
+import { buildAuthorizeUrl, exchangeCode, googleConfigured } from './google-auth.js'
 import type { Config } from './config.js'
 import type { Store } from './db.js'
 import type { PipelineDeps } from './pipeline.js'
@@ -137,12 +138,20 @@ export function buildServer(deps: ServerDeps) {
     })
   }
 
-  server.get('/health', async () => ({
-    ok: true,
-    mindMode: gateway.mode,
-    auth: config.auth === 'on',
-    stats: store.stats(),
-  }))
+  server.get('/health', async (request) => {
+    // Scoped stats: when a valid account token is present, report that
+    // user's workspace; otherwise the (open/legacy) 'local' workspace.
+    const authz = request.headers.authorization ?? ''
+    const token = authz.startsWith('Bearer ') ? authz.slice(7) : ''
+    const account = token ? store.getAccountByApiKey(token) : undefined
+    return {
+      ok: true,
+      mindMode: gateway.mode,
+      auth: config.auth === 'on',
+      google: googleConfigured(config),
+      stats: store.stats(account?.userId ?? DEFAULT_USER_ID),
+    }
+  })
 
   // -------------------------------------------------------------------------
   // Viewer login gate (accounts). Auth routes are exempt from the gate hook.
@@ -218,6 +227,59 @@ export function buildServer(deps: ServerDeps) {
     return { ok: true }
   })
 
+  // -------------------------------------------------------------------------
+  // Google OAuth (social login). Both routes are exempt from the gate hook
+  // because they resolve an account themselves.
+  // -------------------------------------------------------------------------
+
+  server.get('/api/auth/google', async (request, reply) => {
+    if (!googleConfigured(config)) {
+      return reply.code(400).send({ error: 'google_not_configured' })
+    }
+    const origin = `${request.protocol}://${request.host}`
+    return reply.redirect(buildAuthorizeUrl(config, origin).url)
+  })
+
+  server.get('/api/auth/google/callback', async (request, reply) => {
+    const query = request.query as { code?: string; state?: string }
+    const origin = `${request.protocol}://${request.host}`
+    if (!query.code || !query.state) {
+      return reply.redirect(`${origin}/viewer/?google_error=missing_params`)
+    }
+    const result = await exchangeCode(config, query.code, query.state)
+    if (!('email' in result)) {
+      return reply.redirect(`${origin}/viewer/?google_error=${encodeURIComponent(result.error)}`)
+    }
+    const { email, name } = result
+    let account = store.getAccountByEmail(email)
+    if (!account) {
+      const userId = randomUUID()
+      const apiKey = newApiKey()
+      const now = new Date().toISOString()
+      store.upsertUser({ id: userId, name, handle: `@${email.split('@')[0]}`, createdAt: now })
+      store.createAccount({
+        userId,
+        email,
+        passwordHash: '', // OAuth accounts have no local password
+        apiKey,
+        createdAt: now,
+      })
+      store.insertCreatorMemory({
+        id: randomUUID(),
+        kind: 'preference',
+        content: `creator account (google): ${name} (${email})`,
+        refId: userId,
+        createdAt: now,
+      })
+      account = store.getAccountByEmail(email)
+    }
+    if (!account) {
+      return reply.redirect(`${origin}/viewer/?google_error=account_failed`)
+    }
+    // Sign the browser into the viewer with this account's API key.
+    return reply.redirect(`${origin}/viewer/?google_token=${account.apiKey}`)
+  })
+
   server.get('/api/signals', async (request) => {
     const query = z
       .object({
@@ -226,7 +288,8 @@ export function buildServer(deps: ServerDeps) {
         limit: z.coerce.number().int().positive().max(500).optional(),
       })
       .parse(request.query)
-    let signals = store.listSignals(query.kind)
+    const userId = currentUser(request)
+    let signals = store.listSignals(query.kind, userId)
     if (query.topic !== undefined) signals = signals.filter((s) => s.topic === query.topic)
     if (query.limit !== undefined) signals = signals.slice(-query.limit)
     const videos = videoMap(store)
@@ -240,7 +303,8 @@ export function buildServer(deps: ServerDeps) {
         limit: z.coerce.number().int().positive().max(500).optional(),
       })
       .parse(request.query)
-    let comments = store.listComments(query.videoId)
+    const userId = currentUser(request)
+    let comments = store.listComments(query.videoId, userId)
     if (query.limit !== undefined) comments = comments.slice(0, query.limit)
     const videos = videoMap(store)
     return { comments: comments.map((c) => withVideo(c, videos)) }
@@ -250,8 +314,9 @@ export function buildServer(deps: ServerDeps) {
     const query = z
       .object({ status: z.enum(['open', 'proposed', 'approved', 'rejected', 'covered']).optional() })
       .parse(request.query)
-    const opportunities = store.listOpportunities(query.status)
-    const fans = store.listFans(0)
+    const userId = currentUser(request)
+    const opportunities = store.listOpportunities(query.status, userId)
+    const fans = store.listFans(0, userId)
     const byId = new Map(fans.map((f) => [f.authorId, f]))
     const enriched = opportunities.map((o) => ({
       ...o,
@@ -269,35 +334,36 @@ export function buildServer(deps: ServerDeps) {
     if (!body.success) {
       return reply.code(400).send({ error: 'invalid_body', issues: body.error.issues })
     }
-    const opportunity = store.getOpportunity(params.id)
+    const userId = currentUser(request)
+    const opportunity = store.getOpportunity(params.id, userId)
     if (!opportunity) {
       return reply.code(404).send({ error: 'not_found' })
     }
     const { decision, note } = body.data
-    store.updateOpportunityStatus(opportunity.id, decision)
+    store.updateOpportunityStatus(opportunity.id, decision, userId)
     store.insertDecision({
       id: randomUUID(),
       opportunityId: opportunity.id,
       decision,
       note,
       createdAt: new Date().toISOString(),
-    })
+    }, userId)
     store.insertCreatorMemory({
       id: randomUUID(),
       kind: 'decision',
       content: `${opportunity.topicLabel} (${opportunity.topic}): ${decision}`,
       refId: opportunity.id,
       createdAt: new Date().toISOString(),
-    })
+    }, userId)
     await gateway.recordDecision(opportunity, decision, note)
-    return { ok: true, opportunity: store.getOpportunity(opportunity.id) }
+    return { ok: true, opportunity: store.getOpportunity(opportunity.id, userId) }
   })
 
   server.get('/api/fans', async (request) => {
     const query = z
       .object({ minScore: z.coerce.number().int().min(0).max(100).optional() })
       .parse(request.query)
-    return { fans: store.listFans(query.minScore ?? 0) }
+    return { fans: store.listFans(query.minScore ?? 0, currentUser(request)) }
   })
 
   // -------------------------------------------------------------------------
@@ -428,8 +494,8 @@ export function buildServer(deps: ServerDeps) {
   // Weekly content brief (autonomous "make this next" plan)
   // -------------------------------------------------------------------------
 
-  server.get('/api/brief/latest', async () => {
-    const entries = store.listCreatorMemory('brief')
+  server.get('/api/brief/latest', async (request) => {
+    const entries = store.listCreatorMemory('brief', currentUser(request))
     if (entries.length === 0) return { ok: true, brief: null }
     try {
       return { ok: true, brief: JSON.parse(entries[0]!.content) as unknown }
@@ -438,15 +504,16 @@ export function buildServer(deps: ServerDeps) {
     }
   })
 
-  server.post('/api/brief/generate', async () => {
-    const brief = composeContentBrief(store)
+  server.post('/api/brief/generate', async (request) => {
+    const userId = currentUser(request)
+    const brief = composeContentBrief(store, 3, userId)
     store.insertCreatorMemory({
       id: `brief-${brief.id}`,
       kind: 'brief',
       content: JSON.stringify(brief),
       refId: brief.id,
       createdAt: brief.generatedAt,
-    })
+    }, userId)
     // Push to Telegram + webhook when connected (fire-and-forget).
     void notify.brief(brief)
     void webhookNotify?.brief(brief)
@@ -461,18 +528,19 @@ export function buildServer(deps: ServerDeps) {
           .optional(),
       })
       .parse(request.query)
-    return { memory: store.listCreatorMemory(query.kind) }
+    return { memory: store.listCreatorMemory(query.kind, currentUser(request)) }
   })
 
   server.get('/api/digests', async (request) => {
     const query = z.object({ limit: z.coerce.number().int().positive().max(50).optional() }).parse(request.query)
-    return { digests: store.listDigests(query.limit ?? 20) }
+    return { digests: store.listDigests(query.limit ?? 20, currentUser(request)) }
   })
 
-  server.get('/api/drafts', async () => {
-    const fans = new Map(store.listFans(0).map((f) => [f.authorId, f]))
-    const opps = new Map(store.listOpportunities().map((o) => [o.id, o]))
-    const drafts = store.listCreatorMemory('draft').map((entry) => {
+  server.get('/api/drafts', async (request) => {
+    const userId = currentUser(request)
+    const fans = new Map(store.listFans(0, userId).map((f) => [f.authorId, f]))
+    const opps = new Map(store.listOpportunities(undefined, userId).map((o) => [o.id, o]))
+    const drafts = store.listCreatorMemory('draft', userId).map((entry) => {
       // refId is a fan authorId for fan-scoped drafts, an opportunity id when
       // scoped to an opportunity.
       const opportunity = entry.refId ? opps.get(entry.refId) : undefined
@@ -507,10 +575,11 @@ export function buildServer(deps: ServerDeps) {
       return reply.code(400).send({ error: 'invalid_body', issues: [{ message: 'fanId or opportunityId required' }] })
     }
 
-    const fans = store.listFans(0)
+    const userId = currentUser(request)
+    const fans = store.listFans(0, userId)
     let fan = fanId ? fans.find((f) => f.authorId === fanId) : undefined
 
-    let opportunity = opportunityId ? store.getOpportunity(opportunityId) : undefined
+    let opportunity = opportunityId ? store.getOpportunity(opportunityId, userId) : undefined
     if (opportunityId && !opportunity) {
       return reply.code(404).send({ error: 'not_found' })
     }
@@ -521,7 +590,7 @@ export function buildServer(deps: ServerDeps) {
       if (!fan && topAuthorId) {
         // The asker may not be a superfan yet — build a minimal fan from the
         // raw signals so we can still name them in the draft.
-        const signal = store.listSignals().find((s) => s.authorId === topAuthorId)
+        const signal = store.listSignals(undefined, userId).find((s) => s.authorId === topAuthorId)
         if (signal) {
           fan = {
             authorId: signal.authorId,
@@ -547,7 +616,7 @@ export function buildServer(deps: ServerDeps) {
       content: draft,
       refId: opportunity ? opportunity.id : fan.authorId,
       createdAt: new Date().toISOString(),
-    })
+    }, userId)
     return {
       ok: true,
       draft,
@@ -561,7 +630,7 @@ export function buildServer(deps: ServerDeps) {
   server.post('/api/pipeline/run', async (request) => {
     const body = pipelineBodySchema.safeParse(request.body)
     const stages: Stage[] = body.success ? body.data.stages : ['ingest', 'distill', 'relay']
-    const summary = await runPipeline(pipelineDeps, stages)
+    const summary = await runPipeline(pipelineDeps, stages, currentUser(request))
     return { ok: true, summary }
   })
 

@@ -29,20 +29,23 @@ export class TiktokIngestor {
   ) {}
 
   /** Pulls new comments for all known videos and stores them. */
-  async ingestNew(store: Store): Promise<Comment[]> {
-    // Merge per-creator targets stored via the onboarding API (live, no restart).
-    const dbTargets = store.listTargets().filter((t) => t.platform === 'tiktok' && t.kind === 'video')
+  async ingestNew(store: Store, userId = 'local'): Promise<Comment[]> {
+    // Merge per-creator targets stored via the onboarding API (live, no restart),
+    // scoped to the owning user's workspace.
+    const dbTargets = store
+      .listTargets(userId)
+      .filter((t) => t.platform === 'tiktok' && t.kind === 'video')
     const videoIds = [...this.videoIds, ...dbTargets.map((t) => t.value)]
     const inserted: Comment[] = []
     for (const videoId of videoIds) {
-      inserted.push(...(await this.ingestVideo(store, videoId)))
+      inserted.push(...(await this.ingestVideo(store, videoId, userId)))
     }
     return inserted
   }
 
-  private async ingestVideo(store: Store, videoId: string): Promise<Comment[]> {
+  private async ingestVideo(store: Store, videoId: string, userId = 'local'): Promise<Comment[]> {
     const cursorKey = `cursor:tiktok:${videoId}`
-    const cursor = store.getChannelState(cursorKey)
+    const cursor = store.getChannelState(cursorKey, userId)
     const publishedAfter =
       cursor ?? new Date(Date.now() - this.daysBack * 86_400_000).toISOString()
     const inserted: Comment[] = []
@@ -69,7 +72,7 @@ export class TiktokIngestor {
           publishedAt: this.toIso(item.create_time),
           ingestedAt: new Date().toISOString(),
         }
-        if (store.insertComment(comment)) inserted.push(comment)
+        if (store.insertComment(comment, userId)) inserted.push(comment)
       }
       cursorToken = data?.data?.cursor
       if (!cursorToken) break
@@ -80,7 +83,7 @@ export class TiktokIngestor {
         .map((c) => c.publishedAt)
         .sort()
         .at(-1)
-      if (newest) store.setChannelState(cursorKey, newest)
+      if (newest) store.setChannelState(cursorKey, newest, userId)
     }
     return inserted
   }

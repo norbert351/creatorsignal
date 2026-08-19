@@ -83,13 +83,26 @@ export function startWorkers(options: WorkerOptions): WorkerHandle {
     }
   }
 
+  /** Every workspace that should be kept fresh: each account + the env 'local' workspace. */
+  const workspaces = (): string[] => [
+    ...new Set([...store.listUsers().map((u) => u.id), 'local']),
+  ]
+
   const ingestLoop = () =>
     guarded('pipeline', async () => {
-      const summary = await runPipeline(pipelineDeps, ['ingest', 'distill', 'relay'])
-      log(
-        `pipeline: ingested=${summary.ingested} distilled=${summary.distilled} ` +
-          `opportunities=${summary.opportunitiesCreated + summary.opportunitiesUpdated} fans=${summary.fans}`,
-      )
+      for (const userId of workspaces()) {
+        try {
+          const summary = await runPipeline(pipelineDeps, ['ingest', 'distill', 'relay'], userId)
+          log(
+            `pipeline[${userId.slice(0, 8)}]: ingested=${summary.ingested} distilled=${summary.distilled} ` +
+              `opportunities=${summary.opportunitiesCreated + summary.opportunitiesUpdated} fans=${summary.fans}`,
+          )
+        } catch (error) {
+          log(
+            `pipeline[${userId.slice(0, 8)}] failed: ${error instanceof Error ? error.message : String(error)}`,
+          )
+        }
+      }
     })
 
   const digestLoop = () =>

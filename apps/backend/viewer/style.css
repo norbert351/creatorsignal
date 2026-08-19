@@ -554,5 +554,47 @@ em { font-style: italic; }
 #logout.btn-mini { margin-left: 0; }
 #auth-name.pill { gap: 0.3rem; }
 
+.btn-google {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  background: #fff;
+  color: #1f1f1f;
+  border: 1px solid #dadce0;
+  border-radius: 0.5rem;
+  padding: 0.6rem 0.9rem;
+  font-weight: 600;
+}
+.btn-google::before {
+  content: 'G';
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 50%;
+  background: #4285f4;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.btn-google:hover { background: #f8f9fa; }
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--text-3);
+  font-size: 0.75rem;
+}
+.auth-divider::before,
+.auth-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--surface-border);
+}
+
 .pf-icon.wb { background: #2f9e6e; }
 

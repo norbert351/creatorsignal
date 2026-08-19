@@ -17,6 +17,7 @@ import type {
 const DDL = `
 CREATE TABLE IF NOT EXISTS comments (
   id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL DEFAULT 'local',
   platform TEXT NOT NULL DEFAULT 'youtube',
   video_id TEXT NOT NULL,
   author_id TEXT NOT NULL,
@@ -27,9 +28,11 @@ CREATE TABLE IF NOT EXISTS comments (
 );
 CREATE INDEX IF NOT EXISTS idx_comments_video ON comments(video_id);
 CREATE INDEX IF NOT EXISTS idx_comments_platform ON comments(platform);
+CREATE INDEX IF NOT EXISTS idx_comments_user ON comments(user_id);
 
 CREATE TABLE IF NOT EXISTS signals (
   id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL DEFAULT 'local',
   comment_id TEXT NOT NULL UNIQUE,
   platform TEXT NOT NULL DEFAULT 'youtube',
   video_id TEXT NOT NULL,
@@ -45,10 +48,12 @@ CREATE TABLE IF NOT EXISTS signals (
 CREATE INDEX IF NOT EXISTS idx_signals_topic ON signals(topic);
 CREATE INDEX IF NOT EXISTS idx_signals_kind ON signals(kind);
 CREATE INDEX IF NOT EXISTS idx_signals_platform ON signals(platform);
+CREATE INDEX IF NOT EXISTS idx_signals_user ON signals(user_id);
 
 CREATE TABLE IF NOT EXISTS opportunities (
   id TEXT PRIMARY KEY,
-  topic TEXT NOT NULL UNIQUE,
+  user_id TEXT NOT NULL DEFAULT 'local',
+  topic TEXT NOT NULL,
   topic_label TEXT NOT NULL,
   demand_score REAL NOT NULL,
   repeat_count INTEGER NOT NULL,
@@ -57,21 +62,25 @@ CREATE TABLE IF NOT EXISTS opportunities (
   status TEXT NOT NULL,
   related_author_ids TEXT NOT NULL,
   first_seen_at TEXT NOT NULL,
-  last_seen_at TEXT NOT NULL
+  last_seen_at TEXT NOT NULL,
+  UNIQUE(user_id, topic)
 );
 
 CREATE TABLE IF NOT EXISTS fans (
-  author_id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL DEFAULT 'local',
+  author_id TEXT NOT NULL,
   name TEXT NOT NULL,
   engagement_count INTEGER NOT NULL,
   question_count INTEGER NOT NULL,
   topics TEXT NOT NULL,
   superfan_score REAL NOT NULL,
-  last_active_at TEXT NOT NULL
+  last_active_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, author_id)
 );
 
 CREATE TABLE IF NOT EXISTS decisions (
   id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL DEFAULT 'local',
   opportunity_id TEXT NOT NULL,
   decision TEXT NOT NULL,
   note TEXT NOT NULL,
@@ -80,22 +89,28 @@ CREATE TABLE IF NOT EXISTS decisions (
 
 CREATE TABLE IF NOT EXISTS creator_memory (
   id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL DEFAULT 'local',
   kind TEXT NOT NULL,
   content TEXT NOT NULL,
   ref_id TEXT,
   created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_memory_kind ON creator_memory(kind);
+CREATE INDEX IF NOT EXISTS idx_memory_user ON creator_memory(user_id);
 
 CREATE TABLE IF NOT EXISTS digests (
   id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL DEFAULT 'local',
   created_at TEXT NOT NULL,
   items TEXT NOT NULL
 );
+CREATE INDEX IF NOT EXISTS idx_digests_user ON digests(user_id);
 
 CREATE TABLE IF NOT EXISTS channel_state (
-  key TEXT PRIMARY KEY,
-  value TEXT NOT NULL
+  user_id TEXT NOT NULL DEFAULT 'local',
+  key TEXT NOT NULL,
+  value TEXT NOT NULL,
+  PRIMARY KEY (user_id, key)
 );
 
 CREATE TABLE IF NOT EXISTS users (
@@ -179,15 +194,16 @@ export class Store {
   // Comments
   // -------------------------------------------------------------------------
 
-  /** Returns true when the comment was new. */
-  insertComment(comment: Comment): boolean {
+  /** Returns true when the comment was new. Comments are scoped to a user's workspace. */
+  insertComment(comment: Comment, userId = 'local'): boolean {
     const result = this.db
       .prepare(
-        `INSERT OR IGNORE INTO comments (id, platform, video_id, author_id, author_name, text, published_at, ingested_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT OR IGNORE INTO comments (id, user_id, platform, video_id, author_id, author_name, text, published_at, ingested_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         comment.id,
+        userId,
         comment.platform,
         comment.videoId,
         comment.authorId,
@@ -199,26 +215,30 @@ export class Store {
     return Number(result.changes) > 0
   }
 
-  listComments(videoId?: string): Comment[] {
+  listComments(videoId?: string, userId = 'local'): Comment[] {
     const rows: RawRow[] =
       videoId === undefined
-        ? (this.db.prepare('SELECT * FROM comments ORDER BY published_at DESC').all() as RawRow[])
+        ? (this.db
+            .prepare('SELECT * FROM comments WHERE user_id = ? ORDER BY published_at DESC')
+            .all(userId) as RawRow[])
         : (this.db
-            .prepare('SELECT * FROM comments WHERE video_id = ? ORDER BY published_at DESC')
-            .all(videoId) as RawRow[])
+            .prepare(
+              'SELECT * FROM comments WHERE user_id = ? AND video_id = ? ORDER BY published_at DESC',
+            )
+            .all(userId, videoId) as RawRow[])
     return rows.map((r) => this.rowToComment(r))
   }
 
-  listUnsignaledComments(limit: number): Comment[] {
+  listUnsignaledComments(limit: number, userId = 'local'): Comment[] {
     const rows: RawRow[] = this.db
       .prepare(
         `SELECT c.* FROM comments c
-         LEFT JOIN signals s ON s.comment_id = c.id
-         WHERE s.id IS NULL
+         LEFT JOIN signals s ON s.comment_id = c.id AND s.user_id = c.user_id
+         WHERE c.user_id = ? AND s.id IS NULL
          ORDER BY c.published_at
          LIMIT ?`,
       )
-      .all(limit) as RawRow[]
+      .all(userId, limit) as RawRow[]
     return rows.map((r) => this.rowToComment(r))
   }
 
@@ -239,16 +259,17 @@ export class Store {
   // Signals
   // -------------------------------------------------------------------------
 
-  insertSignals(signals: Signal[]): number {
+  insertSignals(signals: Signal[], userId = 'local'): number {
     const stmt = this.db.prepare(
       `INSERT OR IGNORE INTO signals
-         (id, comment_id, platform, video_id, author_id, author_name, kind, topic, topic_label, text, sentiment, ingested_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, user_id, comment_id, platform, video_id, author_id, author_name, kind, topic, topic_label, text, sentiment, ingested_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     let inserted = 0
     for (const s of signals) {
       const result = stmt.run(
         s.id,
+        userId,
         s.commentId,
         s.platform,
         s.videoId,
@@ -266,13 +287,17 @@ export class Store {
     return inserted
   }
 
-  listSignals(kind?: SignalKind): Signal[] {
+  listSignals(kind?: SignalKind, userId = 'local'): Signal[] {
     const rows: RawRow[] =
       kind === undefined
-        ? (this.db.prepare('SELECT * FROM signals ORDER BY ingested_at ASC').all() as RawRow[])
+        ? (this.db
+            .prepare('SELECT * FROM signals WHERE user_id = ? ORDER BY ingested_at ASC')
+            .all(userId) as RawRow[])
         : (this.db
-            .prepare('SELECT * FROM signals WHERE kind = ? ORDER BY ingested_at ASC')
-            .all(kind) as RawRow[])
+            .prepare(
+              'SELECT * FROM signals WHERE user_id = ? AND kind = ? ORDER BY ingested_at ASC',
+            )
+            .all(userId, kind) as RawRow[])
     return rows.map((r) => this.rowToSignal(r))
   }
 
@@ -297,24 +322,25 @@ export class Store {
   // Opportunities
   // -------------------------------------------------------------------------
 
-  upsertOpportunity(opportunity: Opportunity): void {
+  upsertOpportunity(opportunity: Opportunity, userId = 'local'): void {
     this.db
       .prepare(
         `INSERT INTO opportunities
-           (id, topic, topic_label, demand_score, repeat_count, video_count, unanswered, status, related_author_ids, first_seen_at, last_seen_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(topic) DO UPDATE SET
-           id = excluded.id,
-           topic_label = excluded.topic_label,
-           demand_score = excluded.demand_score,
-           repeat_count = excluded.repeat_count,
-           video_count = excluded.video_count,
-           unanswered = excluded.unanswered,
-           related_author_ids = excluded.related_author_ids,
-           last_seen_at = excluded.last_seen_at`,
+          (id, user_id, topic, topic_label, demand_score, repeat_count, video_count, unanswered, status, related_author_ids, first_seen_at, last_seen_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(user_id, topic) DO UPDATE SET
+          id = excluded.id,
+          topic_label = excluded.topic_label,
+          demand_score = excluded.demand_score,
+          repeat_count = excluded.repeat_count,
+          video_count = excluded.video_count,
+          unanswered = excluded.unanswered,
+          related_author_ids = excluded.related_author_ids,
+          last_seen_at = excluded.last_seen_at`,
       )
       .run(
         opportunity.id,
+        userId,
         opportunity.topic,
         opportunity.topicLabel,
         opportunity.demandScore,
@@ -328,36 +354,38 @@ export class Store {
       )
   }
 
-  listOpportunities(status?: OpportunityStatus): Opportunity[] {
+  listOpportunities(status?: OpportunityStatus, userId = 'local'): Opportunity[] {
     const rows: RawRow[] =
       status === undefined
         ? (this.db
-            .prepare('SELECT * FROM opportunities ORDER BY demand_score DESC')
-            .all() as RawRow[])
+            .prepare('SELECT * FROM opportunities WHERE user_id = ? ORDER BY demand_score DESC')
+            .all(userId) as RawRow[])
         : (this.db
-            .prepare('SELECT * FROM opportunities WHERE status = ? ORDER BY demand_score DESC')
-            .all(status) as RawRow[])
+            .prepare(
+              'SELECT * FROM opportunities WHERE user_id = ? AND status = ? ORDER BY demand_score DESC',
+            )
+            .all(userId, status) as RawRow[])
     return rows.map((r) => this.rowToOpportunity(r))
   }
 
-  getOpportunity(id: string): Opportunity | null {
-    const row = this.db.prepare('SELECT * FROM opportunities WHERE id = ?').get(id) as
-      | RawRow
-      | undefined
+  getOpportunity(id: string, userId = 'local'): Opportunity | null {
+    const row = this.db
+      .prepare('SELECT * FROM opportunities WHERE id = ? AND user_id = ?')
+      .get(id, userId) as RawRow | undefined
     return row ? this.rowToOpportunity(row) : null
   }
 
-  getOpportunityByTopic(topic: string): Opportunity | null {
-    const row = this.db.prepare('SELECT * FROM opportunities WHERE topic = ?').get(topic) as
-      | RawRow
-      | undefined
+  getOpportunityByTopic(topic: string, userId = 'local'): Opportunity | null {
+    const row = this.db
+      .prepare('SELECT * FROM opportunities WHERE topic = ? AND user_id = ?')
+      .get(topic, userId) as RawRow | undefined
     return row ? this.rowToOpportunity(row) : null
   }
 
-  updateOpportunityStatus(id: string, status: OpportunityStatus): void {
+  updateOpportunityStatus(id: string, status: OpportunityStatus, userId = 'local'): void {
     this.db
-      .prepare('UPDATE opportunities SET status = ? WHERE id = ?')
-      .run(status, id)
+      .prepare('UPDATE opportunities SET status = ? WHERE id = ? AND user_id = ?')
+      .run(status, id, userId)
   }
 
   private rowToOpportunity(r: RawRow): Opportunity {
@@ -380,21 +408,22 @@ export class Store {
   // Fans
   // -------------------------------------------------------------------------
 
-  upsertFan(fan: Fan): void {
+  upsertFan(fan: Fan, userId = 'local'): void {
     this.db
       .prepare(
         `INSERT INTO fans
-           (author_id, name, engagement_count, question_count, topics, superfan_score, last_active_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(author_id) DO UPDATE SET
-           name = excluded.name,
-           engagement_count = excluded.engagement_count,
-           question_count = excluded.question_count,
-           topics = excluded.topics,
-           superfan_score = excluded.superfan_score,
-           last_active_at = excluded.last_active_at`,
+          (user_id, author_id, name, engagement_count, question_count, topics, superfan_score, last_active_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(user_id, author_id) DO UPDATE SET
+          name = excluded.name,
+          engagement_count = excluded.engagement_count,
+          question_count = excluded.question_count,
+          topics = excluded.topics,
+          superfan_score = excluded.superfan_score,
+          last_active_at = excluded.last_active_at`,
       )
       .run(
+        userId,
         fan.authorId,
         fan.name,
         fan.engagementCount,
@@ -405,10 +434,12 @@ export class Store {
       )
   }
 
-  listFans(minScore = 0): Fan[] {
+  listFans(minScore = 0, userId = 'local'): Fan[] {
     const rows: RawRow[] = this.db
-      .prepare('SELECT * FROM fans WHERE superfan_score >= ? ORDER BY superfan_score DESC')
-      .all(minScore) as RawRow[]
+      .prepare(
+        'SELECT * FROM fans WHERE user_id = ? AND superfan_score >= ? ORDER BY superfan_score DESC',
+      )
+      .all(userId, minScore) as RawRow[]
     return rows.map((r) => ({
       authorId: String(r.author_id),
       name: String(r.name),
@@ -424,14 +455,15 @@ export class Store {
   // Decisions
   // -------------------------------------------------------------------------
 
-  insertDecision(decision: Decision): void {
+  insertDecision(decision: Decision, userId = 'local'): void {
     this.db
       .prepare(
-        `INSERT INTO decisions (id, opportunity_id, decision, note, created_at)
-         VALUES (?, ?, ?, ?, ?)`,
+        `INSERT INTO decisions (id, user_id, opportunity_id, decision, note, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
       )
       .run(
         decision.id,
+        userId,
         decision.opportunityId,
         decision.decision,
         decision.note,
@@ -439,10 +471,10 @@ export class Store {
       )
   }
 
-  listDecisions(): Decision[] {
+  listDecisions(userId = 'local'): Decision[] {
     const rows: RawRow[] = this.db
-      .prepare('SELECT * FROM decisions ORDER BY created_at DESC')
-      .all() as RawRow[]
+      .prepare('SELECT * FROM decisions WHERE user_id = ? ORDER BY created_at DESC')
+      .all(userId) as RawRow[]
     return rows.map((r) => ({
       id: String(r.id),
       opportunityId: String(r.opportunity_id),
@@ -456,24 +488,26 @@ export class Store {
   // Creator memory
   // -------------------------------------------------------------------------
 
-  insertCreatorMemory(entry: CreatorMemoryEntry): void {
+  insertCreatorMemory(entry: CreatorMemoryEntry, userId = 'local'): void {
     this.db
       .prepare(
-        `INSERT INTO creator_memory (id, kind, content, ref_id, created_at)
-         VALUES (?, ?, ?, ?, ?)`,
+        `INSERT INTO creator_memory (id, user_id, kind, content, ref_id, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
       )
-      .run(entry.id, entry.kind, entry.content, entry.refId, entry.createdAt)
+      .run(entry.id, userId, entry.kind, entry.content, entry.refId, entry.createdAt)
   }
 
-  listCreatorMemory(kind?: CreatorMemoryKind): CreatorMemoryEntry[] {
+  listCreatorMemory(kind?: CreatorMemoryKind, userId = 'local'): CreatorMemoryEntry[] {
     const rows: RawRow[] =
       kind === undefined
         ? (this.db
-            .prepare('SELECT * FROM creator_memory ORDER BY created_at DESC')
-            .all() as RawRow[])
+            .prepare('SELECT * FROM creator_memory WHERE user_id = ? ORDER BY created_at DESC')
+            .all(userId) as RawRow[])
         : (this.db
-            .prepare('SELECT * FROM creator_memory WHERE kind = ? ORDER BY created_at DESC')
-            .all(kind) as RawRow[])
+            .prepare(
+              'SELECT * FROM creator_memory WHERE user_id = ? AND kind = ? ORDER BY created_at DESC',
+            )
+            .all(userId, kind) as RawRow[])
     return rows.map((r) => ({
       id: String(r.id),
       kind: String(r.kind) as CreatorMemoryKind,
@@ -484,14 +518,14 @@ export class Store {
   }
 
   /** Topics the creator has covered or approved, as a Set of topic keys. */
-  coveredTopics(): Set<string> {
+  coveredTopics(userId = 'local'): Set<string> {
     const covered = new Set<string>()
-    for (const decision of this.listDecisions()) {
+    for (const decision of this.listDecisions(userId)) {
       if (decision.decision !== 'approved') continue
-      const opp = this.getOpportunity(decision.opportunityId)
+      const opp = this.getOpportunity(decision.opportunityId, userId)
       if (opp) covered.add(opp.topic)
     }
-    for (const entry of this.listCreatorMemory('covered')) {
+    for (const entry of this.listCreatorMemory('covered', userId)) {
       covered.add(entry.content)
     }
     return covered
@@ -501,16 +535,16 @@ export class Store {
   // Digests
   // -------------------------------------------------------------------------
 
-  insertDigest(digest: Digest): void {
+  insertDigest(digest: Digest, userId = 'local'): void {
     this.db
-      .prepare('INSERT OR IGNORE INTO digests (id, created_at, items) VALUES (?, ?, ?)')
-      .run(digest.id, digest.createdAt, JSON.stringify(digest.items))
+      .prepare('INSERT OR IGNORE INTO digests (id, user_id, created_at, items) VALUES (?, ?, ?, ?)')
+      .run(digest.id, userId, digest.createdAt, JSON.stringify(digest.items))
   }
 
-  listDigests(limit = 20): Digest[] {
+  listDigests(limit = 20, userId = 'local'): Digest[] {
     const rows: RawRow[] = this.db
-      .prepare('SELECT * FROM digests ORDER BY created_at DESC LIMIT ?')
-      .all(limit) as RawRow[]
+      .prepare('SELECT * FROM digests WHERE user_id = ? ORDER BY created_at DESC LIMIT ?')
+      .all(userId, limit) as RawRow[]
     return rows.map((r) => {
       let items: Digest['items'] = []
       try {
@@ -527,23 +561,23 @@ export class Store {
   }
 
   // -------------------------------------------------------------------------
-  // Channel state (ingestion cursors)
+  // Channel state (ingestion cursors, per-user)
   // -------------------------------------------------------------------------
 
-  getChannelState(key: string): string | null {
-    const row = this.db.prepare('SELECT value FROM channel_state WHERE key = ?').get(key) as
-      | RawRow
-      | undefined
+  getChannelState(key: string, userId = 'local'): string | null {
+    const row = this.db
+      .prepare('SELECT value FROM channel_state WHERE user_id = ? AND key = ?')
+      .get(userId, key) as RawRow | undefined
     return row ? String(row.value) : null
   }
 
-  setChannelState(key: string, value: string): void {
+  setChannelState(key: string, value: string, userId = 'local'): void {
     this.db
       .prepare(
-        `INSERT INTO channel_state (key, value) VALUES (?, ?)
-         ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+        `INSERT INTO channel_state (user_id, key, value) VALUES (?, ?, ?)
+         ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value`,
       )
-      .run(key, value)
+      .run(userId, key, value)
   }
 
   // -------------------------------------------------------------------------
@@ -762,19 +796,15 @@ export class Store {
   // Stats
   // -------------------------------------------------------------------------
 
-  stats(): Record<string, number> {
-    const tables = [
-      'comments',
-      'signals',
-      'opportunities',
-      'fans',
-      'decisions',
-      'creator_memory',
-      'digests',
-      'targets',
-    ] as const
+  stats(userId = 'local'): Record<string, number> {
+    const userTables = ['comments', 'signals', 'opportunities', 'fans', 'decisions', 'creator_memory', 'digests'] as const
+    const allTables = ['targets', 'videos', 'accounts'] as const
     const out: Record<string, number> = {}
-    for (const table of tables) {
+    for (const table of userTables) {
+      const row = this.db.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE user_id = ?`).get(userId) as RawRow
+      out[table] = Number(row.n)
+    }
+    for (const table of allTables) {
       const row = this.db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as RawRow
       out[table] = Number(row.n)
     }

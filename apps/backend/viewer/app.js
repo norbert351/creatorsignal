@@ -223,6 +223,8 @@ async function initAuth() {
   } catch {
     health = null
   }
+  const googleAuth = document.getElementById('google-auth')
+  if (googleAuth) googleAuth.hidden = !(health && health.google)
   if (!health || health.auth !== true) {
     // Auth off (or /health unreachable) — open dashboard.
     await boot()
@@ -743,7 +745,37 @@ async function boot() {
   void refresh()
 }
 
+function handleDeepLinkAuth() {
+  // Google OAuth returns here with ?google_token= or ?google_error=.
+  const params = new URLSearchParams(window.location.search)
+  const token = params.get('google_token')
+  const error = params.get('google_error')
+  const clean = () => {
+    const base = window.location.pathname
+    let search = window.location.search
+      .replace(/[?&]google_token=[^&]*/, '')
+      .replace(/[?&]google_error=[^&]*/, '')
+      .replace(/^&/, '?')
+      .replace(/^\?$/, '')
+    history.replaceState(null, '', base + search)
+  }
+  if (error) {
+    clean()
+    document.addEventListener('DOMContentLoaded', () => {
+      showAuth()
+      const e = document.getElementById('auth-err')
+      if (e) e.textContent = 'Google sign-in failed — try again or use email.'
+    })
+  }
+  if (token) {
+    localStorage.setItem(TOKEN_KEY, token)
+    clean()
+    window.location.reload()
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+  handleDeepLinkAuth()
   bindAuth()
   void initAuth()
 })

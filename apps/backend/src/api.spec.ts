@@ -493,6 +493,103 @@ describe('api auth (viewer login gate)', () => {
     const health = await server.inject({ method: 'GET', url: '/health' })
     expect(health.statusCode).toBe(200)
   })
+
+  it('isolates profiles per account', async () => {
+    // Account A sets a profile.
+    const regA = await server.inject({
+      method: 'POST',
+      url: '/api/auth/register',
+      payload: { email: 'alice@example.com', password: 'password123', name: 'Alice', handle: '@alice' },
+    })
+    const tokenA = regA.json().token
+    const setA = await server.inject({
+      method: 'POST',
+      url: '/api/profile',
+      headers: { authorization: `Bearer ${tokenA}` },
+      payload: { name: 'Alice Creator', handle: '@alice' },
+    })
+    expect(setA.statusCode).toBe(200)
+    expect(store.listTargets(regA.json().user.id)).toHaveLength(0)
+
+    // Account B sees its OWN empty profile, not Alice's.
+    const regB = await server.inject({
+      method: 'POST',
+      url: '/api/auth/register',
+      payload: { email: 'bob@example.com', password: 'password123', name: 'Bob', handle: '@bob' },
+    })
+    const tokenB = regB.json().token
+    const profB = await server.inject({
+      method: 'GET',
+      url: '/api/profile',
+      headers: { authorization: `Bearer ${tokenB}` },
+    })
+    expect(profB.statusCode).toBe(200)
+    // Bob sees HIS OWN register profile, not Alice's.
+    expect(profB.json().user.name).toBe('Bob')
+    expect(profB.json().user.name).not.toBe('Alice Creator')
+    expect(profB.json().user.id).not.toBe(regA.json().user.id)
+
+    // Alice's profile is unchanged.
+    const profA = await server.inject({
+      method: 'GET',
+      url: '/api/profile',
+      headers: { authorization: `Bearer ${tokenA}` },
+    })
+    expect(profA.json().user.name).toBe('Alice Creator')
+  })
+
+  it('reports google login as disabled when no OAuth creds are configured', async () => {
+    const health = await server.inject({ method: 'GET', url: '/health' })
+    expect(health.json().google).toBe(false)
+    const start = await server.inject({ method: 'GET', url: '/api/auth/google' })
+    expect(start.statusCode).toBe(400)
+    expect(start.json().error).toBe('google_not_configured')
+  })
+})
+
+describe('api google auth (configured)', () => {
+  let server: FastifyInstance
+  let store: Store
+
+  beforeAll(async () => {
+    store = new Store(':memory:')
+    const config = makeConfig({
+      CREATORSIGNAL_AUTH: 'on',
+      CREATORSIGNAL_GOOGLE_CLIENT_ID: 'tests.apps.googleusercontent.com',
+      CREATORSIGNAL_GOOGLE_CLIENT_SECRET: 'g0sc-secret',
+    })
+    server = buildServer({
+      store,
+      gateway: new SimulatedMindGateway(),
+      pipelineDeps: makeDeps(store),
+      config,
+      notify: new TelegramNotifier({ store }),
+    })
+    await server.ready()
+  })
+
+  afterAll(async () => {
+    await server.close()
+    store.close()
+  })
+
+  it('flags google available in health', async () => {
+    const health = await server.inject({ method: 'GET', url: '/health' })
+    expect(health.json().google).toBe(true)
+  })
+
+  it('redirects to Google authorize when starting the flow', async () => {
+    const response = await server.inject({
+      method: 'GET',
+      url: '/api/auth/google',
+      headers: { host: 'localhost:9999' },
+    })
+    expect(response.statusCode).toBe(302)
+    expect(response.headers.location).toContain('accounts.google.com/o/oauth2/v2/auth')
+    expect(response.headers.location).toContain(
+      'redirect_uri=http%3A%2F%2Flocalhost%3A9999%2Fapi%2Fauth%2Fgoogle%2Fcallback',
+    )
+  })
 })
 
 describe('api webhook digest', () => {
