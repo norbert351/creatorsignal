@@ -11,3 +11,5 @@ data/
 *.sqlite-journal
 *.log
 .DS_Store
+# Demo/product walkthrough videos are for local/showing only, never pushed.
+apps/backend/viewer/*.mp4

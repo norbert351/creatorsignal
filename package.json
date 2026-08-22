@@ -10,8 +10,7 @@
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
-    "dev:backend": "pnpm --filter @creatorsignal/backend dev",
-    "seed": "pnpm --filter @creatorsignal/backend seed"
+    "dev:backend": "pnpm --filter @creatorsignal/backend dev"
   },
   "devDependencies": {
     "@types/node": "22.20.1",

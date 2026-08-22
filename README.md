@@ -1,9 +1,9 @@
 # CreatorSignal
 
 A persistent Minds agent that listens to your audience, remembers what people
-care about, and tells you what to create next.
-
-Built for the Creative Minds Jam #1 (Audience Growth & Engagement track).
+care about, and tells you what to create next. It runs on your real channel
+data: no demo fixtures, no canned answers. Set your auth and ingest keys in
+`.env` and the backend ingests, distills, and pushes on its own schedule.
 
 ## What it does
 
@@ -37,13 +37,15 @@ docs/              Architecture and demo documentation
 ```bash
 pnpm install
 pnpm build
-pnpm seed              # load the demo dataset and run the pipeline
 pnpm dev:backend       # boot the API on :3500 (see .env.example)
 ```
 
-With the default `.env` (no external keys) the backend runs fully offline:
-`MIND_MODE=simulated` runs the detection logic locally and
-`SEED_ON_BOOT=true` loads the Bir Tawil fixture on first boot.
+Set `CREATORSIGNAL_YOUTUBE_API_KEY` (+ channel/video ids) and, optionally, a
+`CREATORSIGNAL_LLM_API_KEY` for distilling with an LLM. The backend runs
+continuously: workers ingest real comments on a schedule, distill them, and
+push opportunities, digests, and a weekly brief. `MIND_MODE=simulated` runs the
+detection logic locally; connect a real Minds bot via Telegram for the full
+Mind loop.
 
 ## Key endpoints
 
@@ -55,7 +57,7 @@ With the default `.env` (no external keys) the backend runs fully offline:
 | GET | `/api/memory` | The creator memory trail |
 | GET | `/api/digests` | Daily digests the Mind produced |
 | POST | `/api/pipeline/run` | Manually trigger ingest, distill, or relay |
-| POST | `/api/seed/reset` | Reset to the demo dataset |
+| POST | `/api/brief/generate` | Generate the weekly content brief now |
 
 ## Connecting a real Mind
 

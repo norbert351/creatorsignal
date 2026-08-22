@@ -25,7 +25,7 @@ runs as Mind skills, and the backend is connective tissue plus a thin viewer.
  YouTube comments
       |
       v
-[ingest]  pulls new comment threads (YouTube Data API or demo fixtures)
+[ingest]  pulls new comment threads (YouTube Data API — real data)
       |
       v
 [distill] classifies each comment into a signal
@@ -102,5 +102,5 @@ The creator never has to ask. The Mind pushes.
 | Minds integration depth | Memory and detection live in the Mind; the backend only feeds it and renders its outputs |
 | Problem fit | Repeated unanswered questions and nameless superfans are universal creator pain |
 | Innovation | Audience listening plus relationship memory, not another post generator |
-| Execution | Working backend, seeded demo, replayable pipeline, 29 unit tests |
+| Execution | Working backend, real-data ingest, replayable pipeline, 82 unit tests |
 | Viability | One integration (YouTube comments) is a clear wedge into a huge market |
