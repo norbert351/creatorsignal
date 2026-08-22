@@ -71,6 +71,7 @@ function renderTargets(targets) {
         try {
           const res = await api(`/targets/${t.id}`, { method: 'DELETE' })
           renderTargets(res.targets)
+          renderConnections(res.targets)
         } catch (error) {
           console.error('remove target failed', error)
         }
@@ -80,6 +81,36 @@ function renderTargets(targets) {
       chip.append(inner, remove)
       wrap.append(chip)
     }
+  }
+}
+
+/** Consolidated "Your connected socials" list on the profile, each with a Disconnect. */
+function renderConnections(targets) {
+  const wrap = document.getElementById('connections-list')
+  if (!wrap) return
+  wrap.innerHTML = ''
+  if (!targets.length) {
+    wrap.append(el('div', 'empty', 'No socials connected yet — pick one below to start.'))
+    return
+  }
+  for (const t of targets) {
+    const meta = PLATFORM_META[t.platform] ?? { label: t.platform, dot: 'youtube' }
+    const row = el('div', 'conn-row')
+    const info = el('span', 'conn-info', '')
+    info.append(el('span', `pill-sm platform-pill ${meta.dot}`, meta.label), ' ', el('span', 'conn-value', t.value), ' ', el('span', 'pill-sm', t.kind))
+    const disc = el('button', 'btn btn-danger-mini', 'Disconnect')
+    disc.title = `Disconnect ${meta.label}`
+    disc.onclick = async () => {
+      try {
+        const res = await api(`/targets/${t.id}`, { method: 'DELETE' })
+        renderTargets(res.targets)
+        renderConnections(res.targets)
+      } catch (error) {
+        console.error('disconnect failed', error)
+      }
+    }
+    row.append(info, disc)
+    wrap.append(row)
   }
 }
 
@@ -116,6 +147,7 @@ function bindOnboarding() {
         })
         input.value = ''
         renderTargets(res.targets)
+        renderConnections(res.targets)
       } catch (error) {
         console.error('add target failed', error)
       } finally {
@@ -133,6 +165,33 @@ function bindOnboarding() {
 }
 
 // ---------------------------------------------------------------- login gate
+
+function initMenu() {
+  const toggle = document.getElementById('menu-toggle')
+  const menu = document.getElementById('topbar-menu')
+  if (!toggle || !menu) return
+  const close = () => {
+    menu.classList.remove('open')
+    toggle.classList.remove('open')
+    toggle.setAttribute('aria-expanded', 'false')
+  }
+  toggle.addEventListener('click', (e) => {
+    e.stopPropagation()
+    const open = menu.classList.toggle('open')
+    toggle.classList.toggle('open', open)
+    toggle.setAttribute('aria-expanded', String(open))
+  })
+  // Close when the user picks a control inside the menu, or taps outside it.
+  menu.addEventListener('click', (e) => {
+    if (e.target.closest('button, a')) close()
+  })
+  document.addEventListener('click', (e) => {
+    if (!menu.contains(e.target) && !toggle.contains(e.target)) close()
+  })
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') close()
+  })
+}
 
 function setAuthMode(mode) {
   const register = mode === 'register'
@@ -384,6 +443,7 @@ async function loadOnboarding() {
     document.getElementById('profile-handle').value = res.user.handle
   }
   renderTargets(res.targets)
+  renderConnections(res.targets)
 }
 
 // ------------------------------------------------------------------ render
@@ -728,6 +788,15 @@ async function runPipeline() {
 }
 
 async function boot() {
+  initMenu()
+  document.getElementById('profile-btn').onclick = () => {
+    const onboarding = document.getElementById('onboarding')
+    if (onboarding) onboarding.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    const menu = document.getElementById('topbar-menu')
+    const toggle = document.getElementById('menu-toggle')
+    if (menu) menu.classList.remove('open')
+    if (toggle) toggle.classList.remove('open')
+  }
   bindOnboarding()
   document.getElementById('run-pipeline').onclick = runPipeline
   document.getElementById('generate-brief').onclick = generateBrief

@@ -21,11 +21,17 @@
       <p class="tagline">a persistent Mind for creators</p>
     </div>
   </a>
-  <div class="status">
-    <span id="auth-name" class="pill" hidden></span>
-    <button id="logout" class="btn btn-mini" hidden>Log out</button>
-    <span id="mind-mode" class="pill">mind: —</span>
-    <button id="run-pipeline" class="btn btn-primary">Run pipeline</button>
+  <div class="topbar-right">
+    <div class="status" id="topbar-menu">
+      <button id="profile-btn" class="btn btn-mini" title="Go to your profile & connections">Profile</button>
+      <span id="auth-name" class="pill" hidden></span>
+      <button id="logout" class="btn btn-mini" hidden>Log out</button>
+      <span id="mind-mode" class="pill">mind: —</span>
+      <button id="run-pipeline" class="btn btn-primary">Run pipeline</button>
+    </div>
+    <button id="menu-toggle" class="menu-toggle" aria-label="Open menu" aria-expanded="false">
+      <span></span><span></span><span></span>
+    </button>
   </div>
 </div>
 
@@ -98,6 +104,14 @@
       <input id="profile-handle" type="text" placeholder="e.g. @zubbycrypt" autocomplete="off" />
     </div>
     <button id="save-profile" class="btn btn-secondary">Save profile</button>
+  </div>
+
+  <div class="connections" id="connections">
+    <div class="connections-head">
+      <h4>Your connected socials</h4>
+      <p class="hint">Channels you've connected so the Mind listens. Disconnect any time.</p>
+    </div>
+    <div id="connections-list" class="connections-list"></div>
   </div>
 
   <div class="platforms" id="platform-grid">
