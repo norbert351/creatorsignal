@@ -533,9 +533,58 @@ describe('api auth (viewer login gate)', () => {
     const profA = await server.inject({
       method: 'GET',
       url: '/api/profile',
-      headers: { authorization: `Bearer ${tokenA}` },
+      headers: { authorization: 'Bearer ' + tokenA },
     })
     expect(profA.json().user.name).toBe('Alice Creator')
+  })
+
+  it('isolates Telegram push config per account', async () => {
+    // Seed two accounts' Telegram configs directly in their own settings rows
+    // (bypassing the live Telegram API that connect() calls).
+    const regA = await server.inject({
+      method: 'POST',
+      url: '/api/auth/register',
+      payload: { email: 'tela@example.com', password: 'password123', name: 'Tela', handle: '@tela' },
+    })
+    const tokenA = regA.json().token
+    const uidA = regA.json().user.id
+    store.setSetting(uidA, 'telegram.bot_token', 'botA')
+    store.setSetting(uidA, 'telegram.group_id', '@gA')
+
+    const regB = await server.inject({
+      method: 'POST',
+      url: '/api/auth/register',
+      payload: { email: 'telb@example.com', password: 'password123', name: 'Telb', handle: '@telb' },
+    })
+    const tokenB = regB.json().token
+    const uidB = regB.json().user.id
+    store.setSetting(uidB, 'telegram.bot_token', 'botB')
+    store.setSetting(uidB, 'telegram.group_id', '@gB')
+
+    // Each account reads its OWN config, not the other's.
+    const a = await server.inject({
+      method: 'GET',
+      url: '/api/settings/telegram',
+      headers: { authorization: 'Bearer ' + tokenA },
+    })
+    expect(a.json().enabled).toBe(true)
+    expect(a.json().groupIdMasked).toBe('@gA')
+
+    const b = await server.inject({
+      method: 'GET',
+      url: '/api/settings/telegram',
+      headers: { authorization: 'Bearer ' + tokenB },
+    })
+    expect(b.json().enabled).toBe(true)
+    expect(b.json().groupIdMasked).toBe('@gB')
+
+    // Alice's config was not clobbered by Bob's connect.
+    const a2 = await server.inject({
+      method: 'GET',
+      url: '/api/settings/telegram',
+      headers: { authorization: 'Bearer ' + tokenA },
+    })
+    expect(a2.json().groupIdMasked).toBe('@gA')
   })
 
   it('reports google login as disabled when no OAuth creds are configured', async () => {

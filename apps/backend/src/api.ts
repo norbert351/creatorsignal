@@ -436,8 +436,8 @@ export function buildServer(deps: ServerDeps) {
   // Telegram push config (web-configurable delivery channel)
   // -------------------------------------------------------------------------
 
-  server.get('/api/settings/telegram', async () => {
-    return { ok: true, ...notify.status() }
+  server.get('/api/settings/telegram', async (request) => {
+    return { ok: true, ...notify.status(currentUser(request)) }
   })
 
   server.post('/api/settings/telegram', async (request, reply) => {
@@ -446,28 +446,33 @@ export function buildServer(deps: ServerDeps) {
       return reply.code(400).send({ error: 'invalid_body', issues: body.error.issues })
     }
     try {
-      const result = await notify.connect(body.data.botToken, body.data.groupId)
+      const result = await notify.connect(
+        body.data.botToken,
+        body.data.groupId,
+        currentUser(request),
+      )
       if (!result.ok) {
         return reply.code(400).send({ error: 'invalid_bot_token', message: result.error })
       }
-      return { ...result, ...notify.status() }
+      return { ...result, ...notify.status(currentUser(request)) }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       return reply.code(400).send({ error: 'telegram_connect_failed', message })
     }
   })
 
-  server.delete('/api/settings/telegram', async () => {
-    notify.disconnect()
-    return { ok: true, ...notify.status() }
+  server.delete('/api/settings/telegram', async (request) => {
+    notify.disconnect(currentUser(request))
+    return { ok: true, ...notify.status(currentUser(request)) }
   })
 
   // -------------------------------------------------------------------------
   // Webhook digest config ("other channel": email bridge, Slack, raw HTTP)
   // -------------------------------------------------------------------------
 
-  server.get('/api/settings/webhook', async () => {
-    return { ok: true, ...(webhookNotify?.status() ?? { enabled: false, urlMasked: null }) }
+  server.get('/api/settings/webhook', async (request) => {
+    const uid = currentUser(request)
+    return { ok: true, ...(webhookNotify?.status(uid) ?? { enabled: false, urlMasked: null }) }
   })
 
   server.post('/api/settings/webhook', async (request, reply) => {
@@ -478,16 +483,18 @@ export function buildServer(deps: ServerDeps) {
     if (!body.success) {
       return reply.code(400).send({ error: 'invalid_body', issues: body.error.issues })
     }
-    const result = await webhookNotify.connect(body.data.url)
+    const uid = currentUser(request)
+    const result = await webhookNotify.connect(body.data.url, uid)
     if (!result.ok) {
       return reply.code(400).send({ error: 'invalid_webhook_url', message: result.error })
     }
-    return { ok: true, ...webhookNotify.status() }
+    return { ok: true, ...webhookNotify.status(uid) }
   })
 
-  server.delete('/api/settings/webhook', async () => {
-    webhookNotify?.disconnect()
-    return { ok: true, ...(webhookNotify?.status() ?? { enabled: false, urlMasked: null }) }
+  server.delete('/api/settings/webhook', async (request) => {
+    const uid = currentUser(request)
+    webhookNotify?.disconnect(uid)
+    return { ok: true, ...(webhookNotify?.status(uid) ?? { enabled: false, urlMasked: null }) }
   })
 
   // -------------------------------------------------------------------------

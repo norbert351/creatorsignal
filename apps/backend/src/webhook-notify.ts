@@ -43,17 +43,23 @@ export class WebhookNotifier {
     this.log = options.log ?? ((level, message) => console.log(`[webhook] ${level}: ${message}`))
   }
 
-  getUrl(): string | null {
-    return this.store.getSetting(this.userId, WEBHOOK_SETTINGS_KEY)
+  /** Resolve the user whose push settings to read/write. */
+  private resolveUser(userId?: string): string {
+    return userId ?? this.userId
   }
 
-  status(): WebhookStatus {
-    const url = this.getUrl()
+  getUrl(userId?: string): string | null {
+    return this.store.getSetting(this.resolveUser(userId), WEBHOOK_SETTINGS_KEY)
+  }
+
+  status(userId?: string): WebhookStatus {
+    const url = this.getUrl(this.resolveUser(userId))
     return { enabled: Boolean(url), urlMasked: url ? maskUrl(url) : null }
   }
 
   /** Validate the URL, persist it, and fire a test ping. */
-  async connect(urlRaw: string): Promise<{ ok: boolean; urlMasked: string; error?: string }> {
+  async connect(urlRaw: string, userId?: string): Promise<{ ok: boolean; urlMasked: string; error?: string }> {
+    const uid = this.resolveUser(userId)
     let url: URL
     try {
       url = new URL(urlRaw.trim())
@@ -63,35 +69,38 @@ export class WebhookNotifier {
     if (url.protocol !== 'http:' && url.protocol !== 'https:') {
       return { ok: false, urlMasked: '', error: 'must be http(s)' }
     }
-    this.store.setSetting(this.userId, WEBHOOK_SETTINGS_KEY, url.toString())
-    const sent = await this.post({ kind: 'hello', message: 'CreatorSignal Mind connected 🎙' })
+    this.store.setSetting(uid, WEBHOOK_SETTINGS_KEY, url.toString())
+    const sent = await this.post({ kind: 'hello', message: 'CreatorSignal Mind connected 🎙' }, uid)
     if (!sent) this.log('warn', 'test ping failed')
     this.log('info', `connected webhook ${maskUrl(url.toString())}`)
     return { ok: true, urlMasked: maskUrl(url.toString()) }
   }
 
-  disconnect(): void {
-    this.store.deleteSetting(this.userId, WEBHOOK_SETTINGS_KEY)
+  disconnect(userId?: string): void {
+    this.store.deleteSetting(this.resolveUser(userId), WEBHOOK_SETTINGS_KEY)
     this.log('info', 'disconnected')
   }
 
   /** POST the digest payload. No-op when not configured. */
-  async digest(digest: Digest): Promise<void> {
-    if (!this.getUrl() || digest.items.length === 0) return
-    const sent = await this.post({ kind: 'digest', createdAt: digest.createdAt, items: digest.items })
+  async digest(digest: Digest, userId?: string): Promise<void> {
+    const uid = this.resolveUser(userId)
+    if (!this.getUrl(uid) || digest.items.length === 0) return
+    const sent = await this.post({ kind: 'digest', createdAt: digest.createdAt, items: digest.items }, uid)
     if (sent) this.log('info', `webhook digest with ${digest.items.length} items`)
   }
 
   /** POST the weekly content brief. No-op when not configured. */
-  async brief(brief: ContentBrief): Promise<void> {
-    if (!this.getUrl() || brief.items.length === 0) return
-    const sent = await this.post({ kind: 'brief', period: brief.period, headline: brief.headline, items: brief.items })
+  async brief(brief: ContentBrief, userId?: string): Promise<void> {
+    const uid = this.resolveUser(userId)
+    if (!this.getUrl(uid) || brief.items.length === 0) return
+    const sent = await this.post({ kind: 'brief', period: brief.period, headline: brief.headline, items: brief.items }, uid)
     if (sent) this.log('info', `webhook brief with ${brief.items.length} items`)
   }
 
   /** POST a card for a newly detected opportunity. */
-  async opportunityCreated(opportunity: Opportunity): Promise<void> {
-    if (!this.getUrl()) return
+  async opportunityCreated(opportunity: Opportunity, userId?: string): Promise<void> {
+    const uid = this.resolveUser(userId)
+    if (!this.getUrl(uid)) return
     const sent = await this.post({
       kind: 'opportunity',
       topic: opportunity.topicLabel,
@@ -99,12 +108,12 @@ export class WebhookNotifier {
       repeatCount: opportunity.repeatCount,
       videoCount: opportunity.videoCount,
       unanswered: opportunity.unanswered,
-    })
+    }, uid)
     if (sent) this.log('info', `webhook opportunity "${opportunity.topicLabel}"`)
   }
 
-  private async post(payload: Record<string, unknown>): Promise<boolean> {
-    const url = this.getUrl()
+  private async post(payload: Record<string, unknown>, userId?: string): Promise<boolean> {
+    const url = this.getUrl(this.resolveUser(userId))
     if (!url) return false
     try {
       const response = await fetch(url, {

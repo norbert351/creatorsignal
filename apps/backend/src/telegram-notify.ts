@@ -80,16 +80,23 @@ export class TelegramNotifier {
     this.log = options.log ?? ((level, message) => console.log(`[telegram] ${level}: ${message}`))
   }
 
-  getSettings(): { botToken: string | null; groupId: string | null } {
-    const stored = this.store.listSettings(this.userId)
+  /** Resolve the user whose push settings to read/write. */
+  private resolveUser(userId?: string): string {
+    return userId ?? this.userId
+  }
+
+  getSettings(userId?: string): { botToken: string | null; groupId: string | null } {
+    const uid = this.resolveUser(userId)
+    const stored = this.store.listSettings(uid)
     const botToken = stored[TELEGRAM_SETTINGS_KEYS.botToken] ?? this.fallbackBotToken ?? null
     const groupId = stored[TELEGRAM_SETTINGS_KEYS.groupId] ?? null
     return { botToken, groupId }
   }
 
-  status(): TelegramStatus {
-    const { botToken, groupId } = this.getSettings()
-    const stored = this.store.listSettings(this.userId)
+  status(userId?: string): TelegramStatus {
+    const uid = this.resolveUser(userId)
+    const { botToken, groupId } = this.getSettings(uid)
+    const stored = this.store.listSettings(uid)
     return {
       enabled: Boolean(botToken && groupId),
       botName: stored[TELEGRAM_SETTINGS_KEYS.botName] ?? null,
@@ -102,7 +109,8 @@ export class TelegramNotifier {
    * Validate a bot token against the live Telegram API, persist the config,
    * and send a test message into the group so the creator sees it work.
    */
-  async connect(botToken: string, groupIdRaw: string): Promise<ConnectResult> {
+  async connect(botToken: string, groupIdRaw: string, userId?: string): Promise<ConnectResult> {
+    const uid = this.resolveUser(userId)
     const groupId = resolveChatId(groupIdRaw)
     const bot = await this.callApi<{ username?: string; first_name?: string }>(
       botToken,
@@ -124,10 +132,10 @@ export class TelegramNotifier {
       this.log('warn', `getChat failed for ${groupId}: ${errorMessage(error)}`)
     }
 
-    this.store.setSetting(this.userId, TELEGRAM_SETTINGS_KEYS.botToken, botToken)
-    this.store.setSetting(this.userId, TELEGRAM_SETTINGS_KEYS.groupId, groupId)
-    this.store.setSetting(this.userId, TELEGRAM_SETTINGS_KEYS.botName, botName)
-    if (chatTitle) this.store.setSetting(this.userId, TELEGRAM_SETTINGS_KEYS.chatTitle, chatTitle)
+    this.store.setSetting(uid, TELEGRAM_SETTINGS_KEYS.botToken, botToken)
+    this.store.setSetting(uid, TELEGRAM_SETTINGS_KEYS.groupId, groupId)
+    this.store.setSetting(uid, TELEGRAM_SETTINGS_KEYS.botName, botName)
+    if (chatTitle) this.store.setSetting(uid, TELEGRAM_SETTINGS_KEYS.chatTitle, chatTitle)
 
     const welcome = [
       '<b>CreatorSignal Mind connected</b> 🎙',
@@ -144,16 +152,17 @@ export class TelegramNotifier {
     return { ok: true, botName, chatTitle }
   }
 
-  disconnect(): void {
+  disconnect(userId?: string): void {
+    const uid = this.resolveUser(userId)
     for (const key of Object.values(TELEGRAM_SETTINGS_KEYS)) {
-      this.store.deleteSetting(this.userId, key)
+      this.store.deleteSetting(uid, key)
     }
     this.log('info', 'disconnected')
   }
 
   /** Push a card for a newly detected opportunity. No-op when not configured. */
-  async opportunityCreated(opportunity: Opportunity): Promise<void> {
-    const { botToken, groupId } = this.getSettings()
+  async opportunityCreated(opportunity: Opportunity, userId?: string): Promise<void> {
+    const { botToken, groupId } = this.getSettings(this.resolveUser(userId))
     if (!botToken || !groupId) return
     const card = [
       `🎯 <b>New opportunity: ${esc(opportunity.topicLabel)}</b>`,
@@ -172,8 +181,8 @@ export class TelegramNotifier {
   }
 
   /** Push the daily digest. No-op when not configured. */
-  async digest(digest: Digest): Promise<void> {
-    const { botToken, groupId } = this.getSettings()
+  async digest(digest: Digest, userId?: string): Promise<void> {
+    const { botToken, groupId } = this.getSettings(this.resolveUser(userId))
     if (!botToken || !groupId || digest.items.length === 0) return
     const lines = ['📋 <b>Daily digest</b> — what your audience wants next', '']
     for (const item of digest.items) {
@@ -186,8 +195,8 @@ export class TelegramNotifier {
   }
 
   /** Push the weekly content brief. No-op when not configured. */
-  async brief(brief: ContentBrief): Promise<void> {
-    const { botToken, groupId } = this.getSettings()
+  async brief(brief: ContentBrief, userId?: string): Promise<void> {
+    const { botToken, groupId } = this.getSettings(this.resolveUser(userId))
     if (!botToken || !groupId) return
     if (brief.items.length === 0) {
       this.log('info', 'brief: nothing to push (no open opportunities)')

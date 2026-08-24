@@ -107,44 +107,63 @@ export function startWorkers(options: WorkerOptions): WorkerHandle {
 
   const digestLoop = () =>
     guarded('digest', async () => {
-      const ctx = {
-        opportunities: store.listOpportunities(),
-        fans: store.listFans(0),
-        coveredTopics: store.coveredTopics(),
-        minDemandScore: pipelineDeps.minDemandScore,
-        superfanThreshold: pipelineDeps.superfanThreshold,
+      for (const userId of workspaces()) {
+        try {
+          const ctx = {
+            opportunities: store.listOpportunities(undefined, userId),
+            fans: store.listFans(0, userId),
+            coveredTopics: store.coveredTopics(userId),
+            minDemandScore: pipelineDeps.minDemandScore,
+            superfanThreshold: pipelineDeps.superfanThreshold,
+          }
+          const items = await gateway.requestDigest(ctx)
+          if (items.length === 0) {
+            log(`digest[${userId.slice(0, 8)}]: no items`)
+            continue
+          }
+          const digest: Digest = {
+            id: randomUUID(),
+            createdAt: new Date().toISOString(),
+            items,
+          }
+          store.insertDigest(digest, userId)
+          log(`digest[${userId.slice(0, 8)}]: stored ${items.length} items`)
+          void options.notify?.digest(digest, userId)
+          void options.webhookNotify?.digest(digest, userId)
+        } catch (error) {
+          log(
+            `digest[${userId.slice(0, 8)}] failed: ${error instanceof Error ? error.message : String(error)}`,
+          )
+        }
       }
-      const items = await gateway.requestDigest(ctx)
-      if (items.length === 0) {
-        log('digest: no items')
-        return
-      }
-      const digest: Digest = {
-        id: randomUUID(),
-        createdAt: new Date().toISOString(),
-        items,
-      }
-      store.insertDigest(digest)
-      log(`digest: stored ${items.length} items`)
-      void options.notify?.digest(digest)
-      void options.webhookNotify?.digest(digest)
     })
 
   const briefLoop = () =>
     guarded('brief', async () => {
-      const brief = composeContentBrief(store)
-      store.insertCreatorMemory({
-        id: `brief-${brief.id}`,
-        kind: 'brief',
-        content: JSON.stringify(brief),
-        refId: brief.id,
-        createdAt: brief.generatedAt,
-      })
-      log(
-        `brief: ${brief.items.length} items — ${brief.items.map((i) => i.topicLabel).join(', ') || 'nothing open'}`,
-      )
-      void notify?.brief(brief)
-      void webhookNotify?.brief(brief)
+      for (const userId of workspaces()) {
+        try {
+          const brief = composeContentBrief(store, 3, userId)
+          store.insertCreatorMemory(
+            {
+              id: `brief-${brief.id}`,
+              kind: 'brief',
+              content: JSON.stringify(brief),
+              refId: brief.id,
+              createdAt: brief.generatedAt,
+            },
+            userId,
+          )
+          log(
+            `brief[${userId.slice(0, 8)}]: ${brief.items.length} items — ${brief.items.map((i) => i.topicLabel).join(', ') || 'nothing open'}`,
+          )
+          void notify?.brief(brief, userId)
+          void webhookNotify?.brief(brief, userId)
+        } catch (error) {
+          log(
+            `brief[${userId.slice(0, 8)}] failed: ${error instanceof Error ? error.message : String(error)}`,
+          )
+        }
+      }
     })
 
   const ingestTimer = setInterval(ingestLoop, ingestIntervalMin * 60_000)

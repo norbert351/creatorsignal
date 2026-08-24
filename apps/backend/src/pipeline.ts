@@ -97,10 +97,11 @@ export async function runPipeline(
     }
     // Push new opportunity cards to the creator's Telegram group + webhook
     // (if configured). Fire-and-forget: a slow call must never block the
-    // pipeline.
+    // pipeline. Scoped to the workspace's user so multi-user pushes land in
+    // each creator's own channel.
     for (const opportunity of created) {
-      void deps.notify?.opportunityCreated(opportunity)
-      void deps.webhookNotify?.opportunityCreated(opportunity)
+      void deps.notify?.opportunityCreated(opportunity, userId)
+      void deps.webhookNotify?.opportunityCreated(opportunity, userId)
     }
   }
 
