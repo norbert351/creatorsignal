@@ -114,12 +114,15 @@ export class TelegramMindGateway implements MindGateway {
       const data = await this.callApi('getUpdates', {
         timeout: 30,
         offset: this.offset,
-        allowed_updates: ['message'],
+        allowed_updates: ['message', 'channel_post'],
       })
       const updates = Array.isArray(data.result) ? data.result : []
       for (const update of updates) {
         this.offset = Math.max(this.offset, Number(update.update_id ?? 0) + 1)
-        const text = update?.message?.text
+        // Supergroups deliver as `message`; a Minds Circle built as a channel
+        // delivers the same content as `channel_post`. Accept both so the
+        // integration works whether the Mind lives in a group or a channel.
+        const text = update?.message?.text ?? update?.channel_post?.text
         if (typeof text !== 'string' || text.length === 0) continue
         const parsed = fromMindMessageSchema.safeParse(JSON.parse(text))
         if (parsed.success) {
