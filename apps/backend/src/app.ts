@@ -71,7 +71,7 @@ export function createApp(config: Config, mindModeOverride?: 'simulated' | 'tele
     })
   } else if (mode === 'builder') {
     gateway = new MindsBuilderGateway({
-      apiKey: config.mindsApiKey,
+      apiKey: config.mindsApiKey ?? process.env.MINDS_BUILDER_API_KEY,
       mindId: config.mindsMindId ?? '',
       alias: config.mindsAlias,
       pollIntervalMs: config.mindsPollIntervalMs,
