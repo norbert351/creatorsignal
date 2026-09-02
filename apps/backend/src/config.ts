@@ -6,7 +6,7 @@ import { z } from 'zod'
 export const configSchema = z.object({
   port: z.coerce.number().int().positive().default(3500),
   dbPath: z.string().default('./data/creatorsignal.sqlite'),
-  mindMode: z.enum(['simulated', 'telegram']).default('simulated'),
+  mindMode: z.enum(['simulated', 'telegram', 'builder']).default('simulated'),
   logLevel: z
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
     .default('info'),
@@ -23,6 +23,11 @@ export const configSchema = z.object({
   llmModel: z.string().default('gpt-4o-mini'),
   telegramBotToken: z.string().optional(),
   telegramGroupId: z.string().optional(),
+  /** Minds Builder API integration (mindMode=builder). */
+  mindsApiKey: z.string().optional(),
+  mindsMindId: z.string().optional(),
+  mindsAlias: z.string().optional(),
+  mindsPollIntervalMs: z.coerce.number().int().positive().default(2000),
   ingestIntervalMin: z.coerce.number().int().positive().default(30),
   digestTime: z.string().regex(/^\d{2}:\d{2}$/, 'must be HH:MM').default('09:00'),
   /** Weekly content brief: day of week (0=Sunday..6=Saturday) + time. */
@@ -79,6 +84,11 @@ export function loadConfig(env: NodeJS.ProcessEnv): Config {
       throw new Error(
         'mindMode=telegram requires CREATORSIGNAL_TELEGRAM_BOT_TOKEN and CREATORSIGNAL_TELEGRAM_GROUP_ID',
       )
+    }
+  }
+  if (config.mindMode === 'builder') {
+    if (!config.mindsMindId) {
+      throw new Error('mindMode=builder requires CREATORSIGNAL_MINDS_MIND_ID')
     }
   }
   return config

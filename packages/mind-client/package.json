@@ -16,6 +16,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@animocabrands/minds-client-lib": "^0.1.4",
     "@creatorsignal/shared": "workspace:*",
     "zod": "4.4.3"
   }

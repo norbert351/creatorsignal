@@ -1,5 +1,5 @@
 import type { Comment, FromMindMessage } from '@creatorsignal/shared'
-import { SimulatedMindGateway, TelegramMindGateway } from '@creatorsignal/mind-client'
+import { MindsBuilderGateway, SimulatedMindGateway, TelegramMindGateway } from '@creatorsignal/mind-client'
 import type { MindGateway } from '@creatorsignal/mind-client'
 import { buildServer } from './api.js'
 import type { Config } from './config.js'
@@ -57,7 +57,7 @@ function handleFromMind(store: Store): (message: FromMindMessage) => Promise<voi
  * Composition root. Builds the store, the gateway (simulated or real Mind),
  * the pipeline deps, the HTTP server, and the workers.
  */
-export function createApp(config: Config, mindModeOverride?: 'simulated' | 'telegram'): App {
+export function createApp(config: Config, mindModeOverride?: 'simulated' | 'telegram' | 'builder'): App {
   const store = new Store(config.dbPath)
   const mode = mindModeOverride ?? config.mindMode
 
@@ -66,6 +66,15 @@ export function createApp(config: Config, mindModeOverride?: 'simulated' | 'tele
     gateway = new TelegramMindGateway({
       botToken: config.telegramBotToken ?? '',
       groupId: config.telegramGroupId ?? '',
+      onMessage: handleFromMind(store),
+      log: (level, message) => console.log(`[mind] ${level}: ${message}`),
+    })
+  } else if (mode === 'builder') {
+    gateway = new MindsBuilderGateway({
+      apiKey: config.mindsApiKey,
+      mindId: config.mindsMindId ?? '',
+      alias: config.mindsAlias,
+      pollIntervalMs: config.mindsPollIntervalMs,
       onMessage: handleFromMind(store),
       log: (level, message) => console.log(`[mind] ${level}: ${message}`),
     })
